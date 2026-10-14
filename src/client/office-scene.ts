@@ -9,7 +9,7 @@ import { PondFish, updateWater } from './water.ts';
 import { Dog } from './dog.ts';
 import { FetchBall, RELEASE_AT } from './fetch.ts';
 import { lookFor, lookNumber } from './look.ts';
-import { updateBackWall, updateScreens } from './office.ts';
+import { swivelChairs, updateBackWall, updateScreens } from './office.ts';
 import { doorsOpen } from './control-room-3d.ts';
 import { CAST_SECONDS, landingFrom } from './fishing.ts';
 import { CLIMBING_IN } from './float.ts';
@@ -198,6 +198,7 @@ export function createOfficeScene(host: HTMLElement) {
   view.onFrame((t, dt) => {
     apply(controller.tick());
     characters.forEach((c) => c.update(t, dt));
+    swivelChairs(office.seats, characters.values());
     planes.update(dt);
     poolBalls.update(dt);
     pongBall.update(dt);

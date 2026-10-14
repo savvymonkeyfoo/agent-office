@@ -191,7 +191,7 @@ export class Character {
 
   get pose(): Pose | HangoutPose | 'walking' {
     if (this.mode === 'seated') return POSES[this.state].pose;
-    if (this.mode === 'standing') return this.state === 'needs' ? 'waving' : 'standing';
+    if (this.mode === 'standing') return 'standing';
     if (this.mode === 'hanging') return this.place!.pose;
     return 'walking';
   }
@@ -228,20 +228,15 @@ export class Character {
   }
 
   setState(state: OfficeState) {
-    const was = this.state;
     this.state = state;
-    const atDesk = this.mode === 'seated' || this.mode === 'standing';
-    if (atDesk && (this.mode === 'standing') !== this.standsUp()) this.hopToPlace();
-    else if (this.mode === 'standing' && was !== state) this.hopToPlace(); // turns between finished and a question
+    if (this.mode === 'seated' && state === 'finished') this.hopToPlace();
+    else if (this.mode === 'standing' && state !== 'finished') this.hopToPlace();
   }
 
-  /** Finished agents stand behind the chair; in the control room so does one with a question, turned round to wave. */
-  private standsUp() {
-    return this.state === 'finished' || (this.state === 'needs' && this.seat?.askYaw !== undefined);
-  }
-
-  private standYaw() {
-    return this.state === 'needs' ? this.seat!.askYaw ?? 0 : 0;
+  /** Which way it faces in its chair: in the control room, one with a question swivels round to the room. */
+  private seatedYaw() {
+    const seat = this.seat!;
+    return this.state === 'needs' && seat.askYaw !== undefined ? seat.askYaw : seat.yaw;
   }
 
   /** A table-tennis rally starts now, `from` seconds into it, with this agent at end `side` (#70); null: play stopped. */
@@ -390,16 +385,16 @@ export class Character {
 
   private settle() {
     const seat = this.seat!;
-    const standing = this.standsUp();
+    const standing = this.state === 'finished';
     this.mode = standing ? 'standing' : 'seated';
     this.root.position.copy(standing ? this.above(seat.standSpot) : this.above(seat.sit, SEAT_Y));
-    this.root.rotation.y = standing ? this.standYaw() : seat.yaw;
+    this.root.rotation.y = standing ? 0 : this.seatedYaw();
   }
 
   private hopToPlace() {
     const seat = this.seat!;
-    const standing = this.standsUp();
-    this.hop(standing ? this.above(seat.standSpot) : this.above(seat.sit, SEAT_Y), standing ? this.standYaw() : seat.yaw, () => this.settle());
+    const standing = this.state === 'finished';
+    this.hop(standing ? this.above(seat.standSpot) : this.above(seat.sit, SEAT_Y), standing ? 0 : this.seatedYaw(), () => this.settle());
   }
 
   /** `y` above the floor at `p`. */
@@ -452,6 +447,7 @@ export class Character {
     if (this.mode === 'walking' || this.mode === 'hopping' || this.mode === 'exiting') this.locomote(dt);
 
     if (this.mode === 'seated') {
+      this.root.rotation.y = lerpAngle(this.root.rotation.y, this.seatedYaw(), Math.min(1, dt * 5)); // swivels round
       fl.position.set(-0.16, -0.24, 0.34);
       fr.position.set(0.16, -0.24, 0.34);
       const pose = POSES[this.state].pose;
@@ -485,16 +481,6 @@ export class Character {
         hr.position.set(0.38, 0.48, 0.6);
         bubbleY = 2.0 + ((tt * 0.25) % 1) * 0.25 * motion;
       }
-    } else if (this.mode === 'standing' && this.state === 'needs') {
-      // Turned round to the room, waving so you see who's asking.
-      p.rotation.z = Math.sin(tt * 3) * 0.07 * motion;
-      head.rotation.z = Math.sin(tt * 3) * 0.08 * motion;
-      head.rotation.x = -0.12;
-      hl.position.set(-0.47, 0.6, 0.06);
-      hr.position.set(0.44 + Math.sin(tt * 10) * 0.09 * motion, 1.72 + Math.abs(Math.sin(tt * 10)) * 0.04, 0.12);
-      fl.position.set(-0.17, 0.06, 0.04);
-      fr.position.set(0.17, 0.06, 0.04);
-      bubbleY = 2.4 + Math.abs(Math.sin(tt * 3.2)) * 0.12 * motion;
     } else if (this.mode === 'standing') {
       const hopT = (tt % 3.2) / 3.2;
       const hopY = hopT < 0.16 ? Math.sin((hopT / 0.16) * Math.PI) * 0.22 * motion : 0;

@@ -21,7 +21,7 @@ export interface SeatSpot {
   approach: Point;
   /** Where a finished agent stands, behind its chair. */
   standSpot: Point;
-  /** Control room only: an agent with a question stands at `standSpot` turned this way, to the room, and waves (consoles face away from the camera). */
+  /** Control room only: an agent with a question swivels its chair round to face this way, to the room, and waves (consoles face away from the camera). */
   askYaw?: number;
   /** From the chair out to a walkway. */
   link: Point[];
