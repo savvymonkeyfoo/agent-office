@@ -2,16 +2,13 @@ import './style.css';
 import { createOfficeScene } from './office-scene.ts';
 import { renderCard, showTooltip } from './card.ts';
 import { startUsagePanel } from './usage.ts';
+import { mountProjectFilter, serverHiddenSync } from './projects.ts';
+import { hasWebGL } from './webgl.ts';
+import { sessionUrl } from '../cloud/sessions.ts';
+import { startClock } from './clock.ts';
 import type { AgentRecord, FeedPayload } from '../shared/agent.ts';
 
-export function hasWebGL() {
-  const probe = document.createElement('canvas');
-  try {
-    return !!(probe.getContext('webgl2') || probe.getContext('webgl'));
-  } catch {
-    return false;
-  }
-}
+export { hasWebGL };
 
 function showStatus(text: string | null, problem = false) {
   const status = document.getElementById('status')!;
@@ -57,6 +54,8 @@ export function boot({ createOffice }: BootOptions = {}) {
       acknowledge,
       expanded,
       toggleMessage: () => { expanded = !expanded; select(selected); },
+      // Cloud sessions (ids like session_… or cse_…) open on claude.ai instead of `claude attach`.
+      openLink: /^(session|cse)_/.test(selected) ? sessionUrl : undefined,
     });
   }
 
@@ -72,10 +71,15 @@ export function boot({ createOffice }: BootOptions = {}) {
   office.onPick(select);
   office.onHover((key, x, y) => showTooltip(tooltip, key ? records.get(key) : undefined, x, y));
 
+  const projects = mountProjectFilter(document.getElementById('projects')!, () => last && applyFeed(last), import.meta.env.VITEST ? undefined : serverHiddenSync);
+  let last: FeedPayload | null = null;
+
   function applyFeed(payload: FeedPayload) {
     if (!Array.isArray(payload)) return showStatus(payload.error, true);
-    records = new Map(payload.map((r) => [r.sessionId, r]));
-    office.show(payload);
+    last = payload;
+    const shown = projects.filter(payload);
+    records = new Map(shown.map((r) => [r.sessionId, r]));
+    office.show(shown);
     showStatus(null);
     if (selected) select(selected);
   }
@@ -83,10 +87,21 @@ export function boot({ createOffice }: BootOptions = {}) {
   return { applyFeed };
 }
 
+/** Dev builds only: `?idle=15` shows that many idle agents wandering, without a server (#89). */
+const idleDemo = import.meta.env.DEV ? Number(new URLSearchParams(location.search).get('idle')) : 0;
+
 if (!import.meta.env.VITEST) {
   startUsagePanel(document.getElementById('usage')!);
+  startClock(document.querySelector('.brand h1')!);
   const app = boot();
-  if (app) {
+  // Dev only (#102): `officeFeed([...records])` feeds the office by hand, e.g. to fill the screen wall.
+  if (import.meta.env.DEV && app) Object.assign(window, { officeFeed: app.applyFeed });
+  if (app && idleDemo) {
+    app.applyFeed(Array.from({ length: idleDemo }, (_, i) => ({
+      id: `idle-${i}`, sessionId: `idle-${i}`, name: `agent ${i + 1}`, project: 'demo', cwd: '/demo',
+      state: 'done' as const, lastMessage: null, branch: null, activity: [],
+    })));
+  } else if (app) {
     const events = new EventSource('/api/events');
     events.onmessage = (e) => app.applyFeed(JSON.parse(e.data));
   }

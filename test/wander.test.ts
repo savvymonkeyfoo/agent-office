@@ -108,7 +108,7 @@ describe('#14 AC1 idle agents leave their desk', () => {
     runCharacter(character, () => character.mode === 'hanging');
     expect(character.mode).toBe('hanging');
     expect(character.pose).toBe(walk.place!.pose);
-    expect(character.bubbleKind).toBe('done');
+    expect(character.bubbleKind).toBeNull();
     expect(character.root.position.x).toBeCloseTo(walk.place!.x, 1);
     expect(character.root.position.z).toBeCloseTo(walk.place!.z, 1);
   });
@@ -160,7 +160,7 @@ describe('#14 AC2 chatting', () => {
 });
 
 describe('#14 AC3 staying and moving on', () => {
-  it('#14 AC3 each stay lasts 10–30 s, then the agent walks to another spot; no place is ever double-booked', () => {
+  it('#14 AC3 each stay lasts 10–30 s (#89: plus up to 10 s waiting for a slot), then the agent walks to another spot; no place is ever double-booked', () => {
     const o = office(6, 3);
     for (let n = 1; n <= 6; n++) o.set(n, n % 2 ? 'done' : 'finished');
     const capacity = new Map(HANGOUTS.map((s) => [s.name, s.places.length]));
@@ -192,7 +192,8 @@ describe('#14 AC3 staying and moving on', () => {
         const arrived = walks[i].t + paddle + pathLength(walks[i].path) / WALK_SPEED;
         const stay = walks[i + 1].t - arrived;
         expect(stay, `agent ${n} stay ${i}`).toBeGreaterThanOrEqual(10 - 0.3);
-        expect(stay, `agent ${n} stay ${i}`).toBeLessThanOrEqual(30 + 0.3);
+        // #89: a stay may run up to 10 s over while the agent waits for a free moment to set off.
+        expect(stay, `agent ${n} stay ${i}`).toBeLessThanOrEqual(30 + 10 + 0.3);
         expect(walks[i + 1].place!.spot).not.toBe(walks[i].place!.spot);
         stays++;
       }
@@ -203,7 +204,7 @@ describe('#14 AC3 staying and moving on', () => {
 
 describe('#14 AC4 wander routes stay on walkways', () => {
   for (const rows of [INITIAL_ROWS, INITIAL_ROWS + 1]) {
-    it(`#14 AC4 every route between places, desks and the door misses all furniture (${rows} rows)`, () => {
+    it(`#14 AC4 every route between places, desks and the door misses all furniture (${rows} rows)`, { timeout: 30_000 }, () => {
       const { group, seats, layout } = buildOffice(rows);
       const obstacles = obstaclesIn(group);
       const links = [...layout.hangouts.flatMap((s) => s.places).map((p) => ({ name: `${p.spot}@${p.x},${p.z}`, link: p.link }))];

@@ -39,6 +39,11 @@ export const tag = <T extends THREE.Object3D>(obj: T, kind: string) => {
   obj.userData.kind = kind;
   return obj;
 };
+/** Marks a piece of a prop (not furniture of its own, so not tagged). */
+export const part = <T extends THREE.Object3D>(obj: T, name: string) => {
+  obj.userData.part = name;
+  return obj;
+};
 export const box = (w: number, h: number, d: number, color: string, opts?: MeshOptions) =>
   mesh(new THREE.BoxGeometry(w, h, d), color, opts);
 export const cyl = (rt: number, rb: number, h: number, color: string, opts?: MeshOptions, segments = 24) =>

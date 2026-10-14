@@ -94,8 +94,9 @@ describe('#13 AC3 zones and props', () => {
     const { group } = buildOffice(INITIAL_ROWS + 1);
     group.updateMatrixWorld(true);
     // #25: the floor is the indoor tiles plus the deck; the board and TV hang above it. #38: monitors stand on desks.
+    // #83: the whiteboard and dart board hang flat on the left wall, just past the floor's edge.
     const floor = find(group, 'floor').reduce((box, f) => box.union(new THREE.Box3().setFromObject(f)), new THREE.Box3());
-    const standing = obstaclesIn(group).filter((o) => !['wall', 'window', 'wall-art', 'glass-wall', 'big-board', 'tv'].includes(o.kind));
+    const standing = obstaclesIn(group).filter((o) => !['wall', 'window', 'wall-art', 'whiteboard', 'dartboard', 'glass-wall', 'big-board', 'tv'].includes(o.kind));
     for (const o of standing) {
       expect(o.box.min.x >= floor.min.x - 0.01 && o.box.max.x <= floor.max.x + 0.01, `${o.kind} x`).toBe(true);
       expect(o.box.min.z >= floor.min.z - 0.01 && o.box.max.z <= floor.max.z + 0.01, `${o.kind} z`).toBe(true);

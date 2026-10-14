@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { INITIAL_ROWS, MEETING_ROOM, MEETING_TABLE, officeLayout } from '../src/client/layout.ts';
+import { INITIAL_ROWS, LEFT_WALL_FACE, MEETING_ROOM, MEETING_TABLE, officeLayout } from '../src/client/layout.ts';
 import { buildOffice } from '../src/client/office.ts';
 import { frameFloor, initialOrbit } from '../src/client/camera.ts';
 import { find } from './office-sim.ts';
@@ -10,9 +10,10 @@ const [board] = find(group, 'whiteboard');
 const box = new THREE.Box3().setFromObject(board);
 
 describe('#62 whiteboard on the meeting room\'s solid wall', () => {
+  // #83 moved it from the meeting room's x0 to the office's left wall, which is the room's solid side.
   it('#62 AC1 it hangs on the left wall, its back within 0.1 m of it, facing into the room (+x)', () => {
-    expect(box.min.x - MEETING_ROOM.x0).toBeGreaterThanOrEqual(-0.01);
-    expect(box.min.x - MEETING_ROOM.x0).toBeLessThan(0.1);
+    expect(box.min.x - LEFT_WALL_FACE).toBeGreaterThanOrEqual(-0.01);
+    expect(box.min.x - LEFT_WALL_FACE).toBeLessThan(0.1);
     expect(box.max.x - box.min.x, 'flat on the wall').toBeLessThan(0.2);
     const facing = new THREE.Vector3(0, 0, 1).applyQuaternion(board.getWorldQuaternion(new THREE.Quaternion()));
     expect(facing.x).toBeCloseTo(1, 6);

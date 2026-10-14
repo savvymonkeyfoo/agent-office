@@ -1,0 +1,29 @@
+name: Windows
+on:
+  push:
+    branches: [claude/windows-support]
+  workflow_dispatch:
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run typecheck
+      # Fewer workers: a busy runner otherwise trips vitest's worker RPC timeout after every test has passed.
+      - run: npx vitest run --maxWorkers=2
+      - name: Background install serves the office, uninstall stops it
+        shell: pwsh
+        run: |
+          node scripts/background.mjs install
+          $ok = $false
+          foreach ($i in 1..30) { try { Invoke-WebRequest http://127.0.0.1:4321/ -UseBasicParsing | Out-Null; $ok = $true; break } catch { Start-Sleep 2 } }
+          Get-Content "$env:USERPROFILE\.agent-office\agent-office.log" -ErrorAction SilentlyContinue
+          if (-not $ok) { throw 'office did not start' }
+          node scripts/background.mjs uninstall
+          Start-Sleep 3
+          try { Invoke-WebRequest http://127.0.0.1:4321/ -UseBasicParsing | Out-Null; throw 'office still running' } catch { if ($_.Exception.Message -eq 'office still running') { throw } }
+          if (Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\agent-office.vbs") { throw 'startup entry left behind' }

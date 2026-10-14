@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { ApiHandler } from './http.ts';
 import type { Feed } from './feed.ts';
 import type { AckStore } from './acknowledged.ts';
+import { projectList, type HiddenProjectsStore } from './hidden-projects.ts';
 import { isThisMachine } from './tracking.ts';
 
 export interface UsageApi {
@@ -11,9 +12,11 @@ export interface UsageApi {
 }
 
 const MAX_BODY = 4096;
+/** A full list of hidden project names can be longer than one session id. */
+const MAX_PROJECTS_BODY = 64 * 1024;
 const MAX_ID = 200;
 
-export function createApi(feed: Feed, acknowledged?: AckStore, usage?: UsageApi): ApiHandler {
+export function createApi(feed: Feed, acknowledged?: AckStore, usage?: UsageApi, hiddenProjects?: HiddenProjectsStore): ApiHandler {
   return async (req, res) => {
     const path = new URL(req.url ?? '/', 'http://local').pathname;
 
@@ -47,6 +50,28 @@ export function createApi(feed: Feed, acknowledged?: AckStore, usage?: UsageApi)
       return true;
     }
 
+    if (path === '/api/hidden-projects' && hiddenProjects) {
+      if (req.method === 'GET') {
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+        res.end(JSON.stringify(hiddenProjects.get()));
+        return true;
+      }
+      if (req.method === 'PUT') {
+        // JSON only, like /api/acknowledge: no cross-site writes.
+        if (!req.headers['content-type']?.startsWith('application/json')) return reply(res, 415, 'Send JSON.');
+        let list: string[] | null;
+        try {
+          list = projectList(JSON.parse(await readBody(req, MAX_PROJECTS_BODY)));
+        } catch {
+          return reply(res, 400, 'Body must be a JSON list of project names.');
+        }
+        if (!list) return reply(res, 400, 'Body must be a JSON list of project names.');
+        hiddenProjects.set(list);
+        res.writeHead(204).end();
+        return true;
+      }
+    }
+
     if (req.method === 'POST' && path === '/api/acknowledge' && acknowledged) {
       // JSON only: browsers can't send it cross-site without a preflight we never answer.
       if (!req.headers['content-type']?.startsWith('application/json')) return reply(res, 415, 'Send JSON.');
@@ -72,13 +97,13 @@ function reply(res: ServerResponse, status: number, message: string) {
   return true;
 }
 
-function readBody(req: IncomingMessage): Promise<string> {
+function readBody(req: IncomingMessage, limit = MAX_BODY): Promise<string> {
   return new Promise((resolve, reject) => {
     let body = '';
     req.setEncoding('utf8');
     req.on('data', (chunk: string) => {
       body += chunk;
-      if (body.length > MAX_BODY) { reject(new Error('too large')); req.destroy(); }
+      if (body.length > limit) { reject(new Error('too large')); req.destroy(); }
     });
     req.on('end', () => resolve(body));
     req.on('error', reject);

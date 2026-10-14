@@ -1,4 +1,4 @@
-import path from 'node:path';
+import { posix, win32 } from 'node:path';
 
 /** How many recent tool calls an agent record carries, and how long each line may be. */
 const RECENT = 6;
@@ -15,9 +15,11 @@ const PATHS = new Set(['file_path', 'notebook_path', 'path']);
 
 const text = (value: unknown) => (typeof value === 'string' ? value : '');
 
-/** Paths inside `cwd` are shown relative to it; anything else as given. */
+/** Paths inside `cwd` are shown relative to it; anything else as given. The cwd's own style decides the separators. */
 function shown(file: string, cwd: string | undefined) {
-  if (!cwd || !path.isAbsolute(file)) return file;
+  if (!cwd) return file;
+  const path = /^[a-zA-Z]:|\\/.test(cwd) ? win32 : posix;
+  if (!path.isAbsolute(file)) return file;
   const relative = path.relative(cwd, file);
   return relative && !relative.startsWith('..') && !path.isAbsolute(relative) ? relative : file;
 }

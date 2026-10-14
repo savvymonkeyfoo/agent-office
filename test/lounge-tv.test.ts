@@ -41,7 +41,7 @@ describe('#61 AC1/AC2 the TV is on only while someone is on the sofa', () => {
   });
 
   it('#61 AC2 someone counts as on the sofa once seated there (lounge or couch co-op), not while walking up', () => {
-    expect(sofaPlaces).toHaveLength(7);
+    expect(sofaPlaces).toHaveLength(6); // 3 lounging, 3 co-op (#112)
     for (const place of sofaPlaces) {
       const c = new Character(lookFor('session-1'));
       c.placeAt(START.seats[0], 'done', place);

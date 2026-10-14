@@ -94,7 +94,8 @@ function pool(seed = 4) {
   const o = office(2, seed);
   o.set(1, 'done');
   o.set(2, 'done');
-  for (let i = 0; i < 4 * 4 * 60 * 60 && ![...o.c.agents.values()].every((a) => a.place?.spot === 'pool-table'); i++) o.run(0.25);
+  // Both on their way to the table (#89: the second sets off after the first).
+  for (let i = 0; i < 4 * 4 * 60 * 60 && ![...o.c.agents.values()].every((a) => a.place?.spot === 'pool-table' && !a.queued); i++) o.run(0.25);
   for (const a of o.c.agents.values()) a.nextAt = 1e9; // both stay
   const from = o.log.length;
   o.run(3 * RACK_SECONDS);
@@ -210,9 +211,11 @@ describe('#53 AC6 a player leaving stops play', () => {
     const [first, second] = [...o.c.agents.keys()];
     const events = o.set(Number(first.replace('session-', '')), 'working');
     expect(ofType(events, 'pool')).toEqual([{ type: 'pool', shot: null }]);
-    const other = ofType(events, 'walk').find((w) => w.key === second)!;
+    // #89: the other follows 1–4 s later.
+    const later = o.run(4.05, 0.05);
+    const other = ofType(later, 'walk').find((w) => w.key === second)!;
     expect(other.place?.spot).not.toBe('pool-table');
-    expect(ofType(o.run(30), 'pool')).toEqual([]);
+    expect(ofType([...later, ...o.run(30)], 'pool')).toEqual([]);
 
     const balls = new PoolBalls(new THREE.Scene());
     balls.play(2);

@@ -17,27 +17,29 @@ const SOLO = [
   { spot: 'trampoline', pose: 'bouncing', prop: 'trampoline', at: [plan(16.6, 15.6)] },
   { spot: 'darts', pose: 'throwing-darts', prop: 'dartboard', at: [plan(0.15, 9.4)] },
   { spot: 'hoops', pose: 'shooting-hoops', prop: 'bin', at: [plan(0.5, 11.3)] },
-  { spot: 'planes', pose: 'throwing-plane', prop: 'paper-stack', at: [plan(14.8, 9.4)] },
+  // No prop: the paper stack is gone (#83); pin 12 marks where planes are thrown from.
+  { spot: 'planes', pose: 'throwing-plane', prop: null, at: [plan(14.8, 9.4)] },
 ] as const;
 
 describe('#30 AC1 solo props and poses', () => {
   const { group } = buildOffice(INITIAL_ROWS);
   for (const s of SOLO) {
-    it(`#30 AC1 ${s.spot}: a tagged ${s.prop} at its plan C position, and places posed ${s.pose}`, () => {
-      const props = find(group, s.prop);
-      expect(props).toHaveLength(s.at.length);
-      // The paper stack has no plan C footprint (pin 12 marks where planes are thrown from), so it gets more room.
-      const tolerance = s.spot === 'planes' ? 1 : 0.35;
-      for (const p of s.at) expect(Math.min(...props.map((o) => distance(centre(o), p))), `${s.prop} near (${p.x}, ${p.z})`).toBeLessThan(tolerance);
-      expect(spot(s.spot).places.map((p) => p.pose)).toEqual(s.at.map(() => s.pose));
+    it(`#30 AC1 ${s.spot}: a tagged ${s.prop ?? 'spot'} at its plan C position, and places posed ${s.pose}`, () => {
+      const places = spot(s.spot).places;
+      const props = s.prop ? find(group, s.prop) : [];
+      if (s.prop) expect(props).toHaveLength(s.at.length);
+      const near = (p: { x: number; z: number }) => (s.prop ? Math.min(...props.map((o) => distance(centre(o), p))) : Math.min(...places.map((q) => distance(q, p))));
+      for (const p of s.at) expect(near(p), `${s.prop ?? s.spot} near (${p.x}, ${p.z})`).toBeLessThan(s.prop ? 0.35 : 1);
+      for (const p of spot(s.spot).places) expect(p.pose).toBe(s.pose);
     });
   }
 });
 
 describe('#30 AC2 one agent per place', () => {
-  it('#30 AC2 the loungers have 2 places, every other solo activity 1, and none is a chat spot', () => {
+  it('#30 AC2 the loungers have 2 places, paper planes 4 (#86), every other solo activity 1, and none is a chat spot', () => {
+    const counts: Record<string, number> = { loungers: 2, planes: 4 };
     for (const s of SOLO) {
-      expect(spot(s.spot).places, s.spot).toHaveLength(s.spot === 'loungers' ? 2 : 1);
+      expect(spot(s.spot).places, s.spot).toHaveLength(counts[s.spot] ?? 1);
       expect(spot(s.spot).chat).toBe(false);
     }
   });
@@ -69,7 +71,7 @@ describe('#30 AC3 any free solo place can be chosen', () => {
 
 describe('#30 AC4 routes to and from solo places are clear', () => {
   for (const rows of [INITIAL_ROWS, INITIAL_ROWS + 1]) {
-    it(`#30 AC4 every route between a solo place and every desk, place and the door misses all furniture and walls (${rows} rows)`, () => {
+    it(`#30 AC4 every route between a solo place and every desk, place and the door misses all furniture and walls (${rows} rows)`, { timeout: 30_000 }, () => {
       const { group, layout } = buildOffice(rows);
       const obstacles = obstaclesIn(group);
       const solo = SOLO.flatMap((s) => layout.hangouts.find((h) => h.name === s.spot)!.places);

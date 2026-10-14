@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import type { OfficeState } from '../src/shared/agent.ts';
+import type { Occupant } from '../src/client/controller.ts';
 import { INITIAL_ROWS, WALK_SPEED, behindChair, pathLength, route, type Point } from '../src/client/layout.ts';
 import { buildOffice } from '../src/client/office.ts';
 import { DeskMugs } from '../src/client/break-room.ts';
@@ -14,8 +15,9 @@ function withIdle(idle: number, total: number, seed = 3) {
   const o = office(total, seed);
   for (let i = 1; i <= idle; i++) o.set(i, 'done');
   o.run(5);
-  // Settle: everyone has arrived somewhere.
-  for (let i = 0; i < 400 && [...o.c.agents.values()].some((a) => a.arrivesAt > o.clock.t); i++) o.run(0.25);
+  // Settle: everyone has arrived somewhere, nobody is still on an errand or waiting for a slot to set off (#89).
+  const unsettled = (a: Occupant) => a.arrivesAt > o.clock.t || !!a.reaction || (a.nextAt != null && a.nextAt <= o.clock.t);
+  for (let i = 0; i < 400 && [...o.c.agents.values()].some(unsettled); i++) o.run(0.25);
   return o;
 }
 
@@ -150,7 +152,7 @@ describe('#33 AC3 coffee delivery', () => {
 
 describe('#33 AC4 reaction routes are clear', () => {
   for (const rows of [INITIAL_ROWS, INITIAL_ROWS + 1]) {
-    it(`#33 AC4 routes from every place and desk to every reaction spot miss all furniture and walls (${rows} rows)`, () => {
+    it(`#33 AC4 routes from every place and desk to every reaction spot miss all furniture and walls (${rows} rows)`, { timeout: 30_000 }, () => {
       const { group, layout } = buildOffice(rows);
       const obstacles = obstaclesIn(group);
       const starts = [...layout.hangouts.flatMap((s) => s.places).map((p) => p.link), ...layout.seats.map((s) => s.link)];

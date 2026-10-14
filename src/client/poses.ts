@@ -1,12 +1,12 @@
 import type { OfficeState } from '../shared/agent.ts';
 
 export type Pose = 'typing' | 'waving' | 'sipping' | 'slumped' | 'standing';
-export type BubbleKind = 'needs' | 'done' | 'stale' | 'finished';
+export type BubbleKind = 'working' | 'needs' | 'stale' | 'finished';
 
 export const POSES: Record<OfficeState, { pose: Pose; bubble: BubbleKind | null }> = {
-  working: { pose: 'typing', bubble: null },
+  working: { pose: 'typing', bubble: 'working' },
   needs: { pose: 'waving', bubble: 'needs' },
-  done: { pose: 'sipping', bubble: 'done' },
+  done: { pose: 'sipping', bubble: null },
   stale: { pose: 'slumped', bubble: 'stale' },
   finished: { pose: 'standing', bubble: 'finished' },
 };

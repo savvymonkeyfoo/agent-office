@@ -32,6 +32,19 @@ function limitBar(label: string, window: LimitWindow | null, now: number) {
     </div>`;
 }
 
+const CLOUD_STATUS: Record<string, string> = { allowed: 'Within your limit', allowed_warning: 'Getting close to your limit', rejected: 'Limit reached' };
+
+function cloudLimitLine({ cloud }: UsagePayload, now: number) {
+  if (!cloud) return '<p class="muted">Your plan limit shows once a cloud session has replied.</p>';
+  const label = cloud.window === 'five_hour' ? '5-hour limit' : cloud.window === 'seven_day' ? 'Weekly limit' : 'Plan limit';
+  return `
+    <div class="limit">
+      <div class="limit-line"><b>${label}</b><span>${escapeHtml(CLOUD_STATUS[cloud.status] ?? cloud.status)}${cloud.overage ? ' (using extra usage)' : ''}</span>
+        ${cloud.resetsAt ? `<span class="muted">${formatResetIn(cloud.resetsAt, now)}</span>` : ''}</div>
+      <p class="muted">Cloud sessions report a status, not a percentage.</p>
+    </div>`;
+}
+
 function trackingNotice({ tracking, limits }: UsagePayload, error: string | null) {
   const notice = (body: string) => `<div class="notice">${body}</div>`;
   if (tracking === 'off') {
@@ -84,7 +97,9 @@ export function mountUsagePanel(el: HTMLElement, {
   let enableError: string | null = null;
 
   function render() {
-    const body = usage
+    const body = usage && 'cloud' in usage
+      ? cloudLimitLine(usage, now())
+      : usage
       ? limitBar('Session', usage.limits.session, now()) + limitBar('Week', usage.limits.weekly, now())
         + trackingNotice(usage, enableError) + projectList(usage)
       : '<p class="muted">Loading…</p>';

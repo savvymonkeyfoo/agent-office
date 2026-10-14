@@ -65,17 +65,18 @@ describe('#41 AC1 pan', () => {
   it('#41 AC1 the floor point grabbed stays under the pointer; angle, tilt and zoom stay', () => {
     const { orbit, camera, pointer, gestures } = setup();
     const before = view(orbit);
-    const grabbed = grabAt(pointer, orbit, 700, 700)!.point;
-    gestures.down(1, 700, 700, { pans: true });
-    gestures.move(1, 760, 690);
-    gestures.move(1, 850, 640);
+    // A pixel over open floor in the starting view (moved up from y 700 when the view pulled back, #111).
+    const grabbed = grabAt(pointer, orbit, 700, 600)!.point;
+    gestures.down(1, 700, 600, { pans: true });
+    gestures.move(1, 760, 590);
+    gestures.move(1, 850, 540);
     expect(gestures.up(1)).toBe(false);
     expect([orbit.theta, orbit.phi, orbit.radius]).toEqual([before.theta, before.phi, before.radius]);
     expect(orbit.target.distanceTo(before.target)).toBeGreaterThan(0.3);
     placeCamera(camera, orbit);
     const now = toPixels(grabbed, camera);
     expect(now.x).toBeCloseTo(850, 3);
-    expect(now.y).toBeCloseTo(640, 3);
+    expect(now.y).toBeCloseTo(540, 3);
   });
 
   it('#41 AC1 grabbing the big board drags it along with the pointer, up and down too', () => {

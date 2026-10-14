@@ -1,4 +1,4 @@
-// The lounge TV (#61): off when nobody's on the sofa, otherwise a looping top-down arena match in a
+// The lounge TV (#61): switched on and off with a remote by whoever's on the sofa (#113); when on, a looping top-down arena match in a
 // generic MOBA style (no real game's names, logos or characters): three lanes between two bases,
 // minion waves marching down them, a few champion markers trading blows, and hit flashes.
 import * as THREE from 'three';
@@ -105,7 +105,7 @@ export class LoungeTv {
     this.update(false, 0);
   }
 
-  /** Call every frame with whether anyone is on the sofa. */
+  /** Call every frame with whether the TV is switched on. */
   update(on: boolean, t: number) {
     const material = this.screen.material;
     if (on !== this.on) {
@@ -118,5 +118,28 @@ export class LoungeTv {
       paintGame(this.g, t);
       this.texture!.needsUpdate = true;
     }
+  }
+}
+
+/** Someone who can work the TV's remote (a Character). */
+export interface RemoteUser {
+  usingRemote(): boolean;
+  useRemote(click: () => void): void;
+}
+
+/** Who works the remote (#113): the first to sit on the empty sofa switches the TV on, the last to get up switches it off. */
+export class SofaRemote {
+  on = false;
+
+  /** Every frame, with everyone sitting on the sofa. */
+  update(sitters: RemoteUser[]) {
+    if (this.on || !sitters.length || sitters.some((c) => c.usingRemote())) return;
+    sitters[0].useRemote(() => { this.on = true; });
+  }
+
+  /** `c` is about to get up (call before it walks off): the last one on the sofa switches the TV off first. */
+  gettingUp(c: RemoteUser, sitters: RemoteUser[]) {
+    if (sitters.length !== 1 || sitters[0] !== c) return;
+    if (this.on || c.usingRemote()) c.useRemote(() => { this.on = false; });
   }
 }

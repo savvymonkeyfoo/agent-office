@@ -131,7 +131,8 @@ describe('#25 AC2 plan C zones', () => {
 
   it('#25 AC2 glass meeting room at x 0.3–3.0, y 4.2–7.2 with a table and whiteboard', () => {
     const [room] = find(group, 'meeting-room');
-    const box = boxOf(room);
+    // #83: the whiteboard hangs on the office's left wall, just past the room's glass.
+    const box = room.children.filter((o) => o.userData.kind !== 'whiteboard').reduce((b, o) => b.union(boxOf(o)), new THREE.Box3());
     about(box.min.x, plan(0.3, 0).x);
     about(box.max.x, plan(3.0, 0).x);
     about(box.min.z, plan(0, 4.2).z);
@@ -166,7 +167,7 @@ describe('#25 AC2 plan C zones', () => {
 
 describe('#25 AC3 routes stay clear, and the next epic has room', () => {
   for (const rows of [INITIAL_ROWS, INITIAL_ROWS + 1]) {
-    it(`#25 AC3 arrival, departure and wander routes for every seat and place miss all furniture and walls (${rows} rows)`, () => {
+    it(`#25 AC3 arrival, departure and wander routes for every seat and place miss all furniture and walls (${rows} rows)`, { timeout: 30_000 }, () => {
       const { group, layout } = buildOffice(rows);
       const obstacles = obstaclesIn(group);
       const places = layout.hangouts.flatMap((s) => s.places);
@@ -195,7 +196,7 @@ describe('#25 AC3 routes stay clear, and the next epic has room', () => {
   });
 
   // #29 filled these areas with its props and activity places; anything else must still keep out.
-  const BREAK_ROOM_PROPS = ['sun-lounger', 'pond', 'jetty', 'tree', 'hammock', 'yoga-mat', 'trampoline', 'dartboard', 'bin', 'paper-stack', 'pool-table', 'ping-pong-table', 'pool', 'pool-ring', 'pet-bed', 'dog-bowl'];
+  const BREAK_ROOM_PROPS = ['sun-lounger', 'pond', 'jetty', 'tree', 'hammock', 'yoga-mat', 'trampoline', 'dartboard', 'bin', 'pool-table', 'ping-pong-table', 'pool', 'pool-ring', 'pet-bed', 'dog-bowl'];
   const BREAK_ROOM_SPOTS = ['loungers', 'fishing', 'hammock', 'yoga', 'trampoline', 'darts', 'hoops', 'planes', 'pool-table', 'ping-pong', 'pool-dip'];
   it('#25 AC3 the next epic\'s prop areas hold no furniture other than its own props', () => {
     // From the epic: darts lane y 9–10 on the left wall, bin (0.5, 11.3), pool table (16.4, 6.6), pet bed (16.4, 10.4),

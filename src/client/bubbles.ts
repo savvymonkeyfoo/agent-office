@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import type { BubbleKind } from './poses.ts';
 
-const FILL: Record<BubbleKind, string> = { needs: '#FFB648', finished: '#4D86FF', done: '#FFF8EC', stale: '#D9D3E6' };
-const INK: Record<BubbleKind, string> = { needs: '#3A2400', finished: '#FFFFFF', done: '#5B5275', stale: '#5B5275' };
+const FILL: Record<BubbleKind, string> = { working: '#3FBF7F', needs: '#FFB648', finished: '#4D86FF', stale: '#D9D3E6' };
+const INK: Record<BubbleKind, string> = { working: '#FFFFFF', needs: '#3A2400', finished: '#FFFFFF', stale: '#5B5275' };
 const cache = new Map<BubbleKind, THREE.CanvasTexture | null>();
 
 /** The prototype's speech bubbles, drawn once per kind. Null where there's no 2D canvas (tests). */
@@ -33,8 +33,13 @@ function draw(kind: BubbleKind) {
   } else if (kind === 'finished') {
     g.lineWidth = 22; g.lineCap = 'round';
     g.beginPath(); g.moveTo(84, 98); g.lineTo(114, 128); g.lineTo(172, 66); g.stroke();
-  } else if (kind === 'done') {
-    for (const x of [88, 128, 168]) { g.beginPath(); g.arc(x, 96, 14, 0, Math.PI * 2); g.fill(); }
+  } else if (kind === 'working') {
+    // A cog: busy, not waiting.
+    g.translate(128, 96);
+    for (let i = 0; i < 8; i++) { g.rotate(Math.PI / 4); g.beginPath(); g.roundRect(-11, -62, 22, 26, 5); g.fill(); }
+    g.beginPath(); g.arc(0, 0, 44, 0, Math.PI * 2); g.fill();
+    g.fillStyle = FILL[kind]; g.beginPath(); g.arc(0, 0, 17, 0, Math.PI * 2); g.fill();
+    g.setTransform(1, 0, 0, 1, 0, 0);
   } else {
     g.font = '800 72px Nunito, Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillText('z', 102, 108); g.font = '800 54px Nunito, Arial, sans-serif'; g.fillText('z', 156, 78);

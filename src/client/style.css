@@ -46,6 +46,19 @@ body { background: var(--bg); color: var(--ink); font-family: var(--body); overf
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
+/* Classic / Control room: the current layout is filled in. */
+.layout-picker {
+  display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; box-sizing: border-box; max-width: 100%;
+  border-radius: 14px; background: var(--panel); border: 1px solid var(--line);
+}
+.chip {
+  min-height: 32px; padding: 0 11px; border-radius: 10px; border: 1px solid var(--line);
+  background: transparent; color: var(--ink); font: 700 13px var(--body); cursor: pointer;
+}
+.chip:hover { background: var(--chip); }
+.chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: #2B2545; }
+.chip:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+
 .usage {
   width: 260px; max-width: 100%; min-height: 0; overflow-y: auto; box-sizing: border-box; padding: 10px 14px;
   border-radius: 14px; background: var(--panel); border: 1px solid var(--line); font-size: 13px;
@@ -113,6 +126,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--body); overf
 .btn:hover { background: #423B63; }
 .btn.primary { background: var(--blue); border-color: var(--blue); color: #FFFFFF; }
 .btn.primary:hover { background: #3B74F0; }
+a.btn { display: inline-flex; align-items: center; text-decoration: none; box-sizing: border-box; }
 .btn.link { align-self: flex-start; min-height: 28px; padding: 0 10px; }
 .btn.icon { min-width: 36px; padding: 0; font-size: 18px; line-height: 1; }
 .btn:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
@@ -138,6 +152,17 @@ body { background: var(--bg); color: var(--ink); font-family: var(--body); overf
   position: absolute; right: 16px; top: calc(16px + env(safe-area-inset-top, 0px));
   min-width: 44px; min-height: 44px; display: grid; place-items: center;
 }
+/* Wide or close-up starting view, left of the sky toggle. */
+.zoom {
+  position: absolute; right: 120px; top: calc(16px + env(safe-area-inset-top, 0px));
+  min-width: 44px; min-height: 44px; display: grid; place-items: center;
+}
+.zoom[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: #2B2545; }
+/* The sky/plain toggle, just left of the camera button. */
+.background {
+  position: absolute; right: 68px; top: calc(16px + env(safe-area-inset-top, 0px));
+  min-width: 44px; min-height: 44px; display: grid; place-items: center;
+}
 
 .status {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
@@ -152,3 +177,20 @@ body { background: var(--bg); color: var(--ink); font-family: var(--body); overf
   /* Ends above the highest the card can reach (52% + 12px from the bottom), with a gap. */
   .left { max-height: calc(48% - 100px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); }
 }
+
+/* Cloud sessions: their progress checklist and links. */
+.progress { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 13px; line-height: 1.4; color: var(--ink); }
+.progress li { display: flex; gap: 6px; overflow-wrap: anywhere; min-width: 0; }
+.progress li.head { font-weight: 700; }
+.progress li.done::before { content: '✓'; color: #2E9E66; }
+.progress li.now::before { content: '●'; color: var(--blue); }
+.progress li.todo { color: var(--muted); }
+.progress li.todo::before { content: '○'; }
+.links { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Projects list: tick a project to show its agents. */
+.project-filter { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.project-filter label { display: flex; align-items: center; gap: 8px; cursor: pointer; min-width: 0; }
+.project-filter span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-filter b { color: var(--muted); font-variant-numeric: tabular-nums; }
+.left > .usage { flex-shrink: 1; }

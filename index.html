@@ -15,7 +15,10 @@
     <h1>Agent Office</h1>
   </header>
   <div class="left">
+    <div id="layout-picker" class="layout-picker" role="group" aria-label="Office layout"></div>
+    <div id="theme-picker" class="layout-picker" role="group" aria-label="Seasonal theme"></div>
     <aside id="usage" class="usage" aria-label="Plan usage"></aside>
+    <aside id="projects" class="usage" aria-label="Projects" hidden></aside>
   </div>
 
   <aside class="card" id="card" aria-live="polite" hidden></aside>
@@ -24,6 +27,18 @@
     <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h3l1.5-2.5h6L16.5 7h3A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"/>
       <circle cx="12" cy="13" r="3.5"/>
+    </svg>
+  </button>
+  <button id="zoom" class="btn icon zoom" type="button" aria-pressed="false" title="Close-up view" aria-label="Close-up view">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="10.5" cy="10.5" r="6.5"/>
+      <path d="M15.5 15.5 21 21M8 10.5h5M10.5 8v5"/>
+    </svg>
+  </button>
+  <button id="background" class="btn icon background" type="button" aria-pressed="false" title="Sky or plain background" aria-label="Plain background">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="8"/>
+      <path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/>
     </svg>
   </button>
 </main>

@@ -55,9 +55,9 @@ describe('#5 AC2 more desks', () => {
 describe('#5 AC3 poses and bubbles', () => {
   it('#5 AC3 each state has the prototype pose and bubble', () => {
     expect(POSES).toEqual({
-      working: { pose: 'typing', bubble: null },
+      working: { pose: 'typing', bubble: 'working' },
       needs: { pose: 'waving', bubble: 'needs' },
-      done: { pose: 'sipping', bubble: 'done' },
+      done: { pose: 'sipping', bubble: null },
       stale: { pose: 'slumped', bubble: 'stale' },
       finished: { pose: 'standing', bubble: 'finished' },
     });
@@ -72,7 +72,7 @@ describe('#5 AC3 poses and bubbles', () => {
     const character = new Character(lookFor('session-1'));
     character.sitAt(START.seats[0], 'working');
     character.update(1, 0.016);
-    expect([character.pose, character.bubbleKind]).toEqual(['typing', null]);
+    expect([character.pose, character.bubbleKind]).toEqual(['typing', 'working']);
     for (const state of ['needs', 'done', 'stale'] as const) {
       character.setState(state);
       character.update(2, 0.016);

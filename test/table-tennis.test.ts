@@ -188,7 +188,8 @@ describe('#70 AC6 a player leaving ends the game', () => {
     expect(players.map((k) => o.c.agents.get(k)!.place?.spot)).toEqual(['ping-pong', 'ping-pong']);
     const events = o.set(Number(players[0].replace('session-', '')), 'working');
     expect(ofType(events, 'pong')).toEqual([{ type: 'pong', rally: null, players }]);
-    expect(ofType(events, 'walk').find((w) => w.key === players[1])!.place?.spot).not.toBe('ping-pong');
+    // #89: the other follows 1–4 s later.
+    expect(ofType(o.run(4.05, 0.05), 'walk').find((w) => w.key === players[1])!.place?.spot).not.toBe('ping-pong');
 
     const ball = new PongBallMesh(new THREE.Scene());
     ball.play({ server: 1, hits: 3 });

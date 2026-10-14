@@ -1,8 +1,8 @@
 // See-through water for the pool and the pond (#63): a semi-transparent surface with drifting
 // highlights over a sunken bottom, and a couple of fish in the pond.
 import * as THREE from 'three';
-import { BREAK_ROOM } from './layout.ts';
-import { at, ball, mesh } from './toon.ts';
+import { BREAK_ROOM, type Props } from './layout.ts';
+import { at, ball, mesh, part } from './toon.ts';
 
 export const WATER_OPACITY = 0.6;
 /** How deep the pool and pond go below the deck. */
@@ -45,9 +45,8 @@ export function waterSurface(geometry: THREE.BufferGeometry, color: string) {
 
 export const FISH = 2;
 
-/** Where fish `i` is `t` seconds in: a slow loop well inside the pond, a little below the surface. */
-export function fishAt(i: number, t: number) {
-  const { pond } = BREAK_ROOM;
+/** Where fish `i` is `t` seconds in: a slow loop well inside `pond`, a little below the surface. */
+export function fishAt(i: number, t: number, pond: Props['pond'] = BREAK_ROOM.pond) {
   const w = 0.12 + i * 0.03, phase = i * 2.1;
   const pos = (s: number) => ({
     x: pond.x + 0.62 * pond.rx * Math.sin(w * s + phase),
@@ -57,17 +56,42 @@ export function fishAt(i: number, t: number) {
   return { ...p, y: -0.15 - i * 0.05, heading: Math.atan2(ahead.x - p.x, ahead.z - p.z) };
 }
 
-/** A small toon fish, nose along +z. */
+const FIN_THICKNESS = 0.012;
+const fishLook = { outline: 0.06, shadow: false };
+
+/** A thin upright fin from an outline drawn as (z along the fish, y up). */
+function finGeometry(outline: [number, number][]) {
+  const geometry = new THREE.ExtrudeGeometry(new THREE.Shape(outline.map(([z, y]) => new THREE.Vector2(z, y))), { depth: FIN_THICKNESS, bevelEnabled: false });
+  geometry.translate(0, 0, -FIN_THICKNESS / 2);
+  return geometry.rotateY(-Math.PI / 2);
+}
+
+/** A body fat behind the head and tapering to the tail: a lathe around z, squeezed side to side. */
+function fishBody() {
+  const profile: [number, number][] = [[0, -0.12], [0.022, -0.11], [0.045, -0.06], [0.068, 0], [0.074, 0.045], [0.064, 0.1], [0.038, 0.14], [0, 0.16]];
+  const geometry = new THREE.LatheGeometry(profile.map(([r, z]) => new THREE.Vector2(r, z)), 20).rotateX(Math.PI / 2);
+  return geometry.scale(0.72, 1, 1);
+}
+
+/** A chunky toon fish (#108), 0.36 m nose to tail tip, nose along +z; its tail swings on `userData.tail`. */
 function fishModel(color: string) {
   const fish = new THREE.Group();
-  const body = ball(0.08, color, { outline: 0.06, shadow: false });
-  body.scale.set(0.6, 0.6, 1.4);
-  fish.add(body);
-  const tail = mesh(new THREE.ConeGeometry(0.06, 0.1, 3), color, { outline: 0.06, shadow: false });
-  tail.rotation.x = -Math.PI / 2;
-  fish.add(at(tail, 0, 0, -0.14));
+  fish.add(part(mesh(fishBody(), color, fishLook), 'fish-body'));
+  fish.add(at(part(mesh(finGeometry([[0.05, 0], [-0.05, 0], [-0.06, 0.055], [-0.01, 0.045]]), color, fishLook), 'fish-dorsal'), 0, 0.058, 0));
+  const tail = at(new THREE.Group(), 0, 0, -0.11);
+  tail.add(part(mesh(finGeometry([[0.015, 0.02], [-0.09, 0.07], [-0.065, 0], [-0.09, -0.07], [0.015, -0.02]]), color, fishLook), 'fish-tail'));
+  fish.add(tail);
+  for (const side of [-1, 1]) {
+    const eye = at(part(ball(0.017, '#FFFFFF', fishLook), 'fish-eye'), side * 0.042, 0.018, 0.1);
+    eye.add(at(ball(0.009, '#2A2238', { outline: 0, shadow: false }), side * 0.011, 0, 0.003));
+    fish.add(eye);
+  }
+  fish.userData.tail = tail;
   return fish;
 }
+
+/** The tail's swing at `t`, side to side about its root. */
+const tailSwing = (i: number, t: number) => 0.45 * Math.sin(5 * t + i * 1.7);
 
 /** A "!!" (two bars over two dots), shown over a fish that's spotted the float (#58). */
 function alertMark() {
@@ -84,17 +108,20 @@ export class PondFish {
   readonly fish = ['#F07A4A', '#E2B347'].slice(0, FISH).map(fishModel);
   readonly alerts = this.fish.map(alertMark);
 
-  constructor(parent: THREE.Object3D) {
+  /** `props`: the layout's props, read as it changes. */
+  constructor(parent: THREE.Object3D, private props: () => Props = () => BREAK_ROOM) {
     parent.add(...this.fish, ...this.alerts);
     this.update(0);
   }
 
   /** `caught`: a fish taking part in a catch, where the cast puts it. */
-  update(t: number, caught: { index: number; at: { x: number; y: number; z: number }; heading: number; alert: boolean } | null = null) {
+  update(t: number, caught: { index: number; at: { x: number; y: number; z: number }; heading: number; pitch?: number; wriggle?: number; alert: boolean } | null = null) {
     this.fish.forEach((f, i) => {
-      const at = caught?.index === i ? { ...caught.at, heading: caught.heading } : fishAt(i, t);
+      const at = caught?.index === i ? { ...caught.at, heading: caught.heading, pitch: caught.pitch ?? 0, wriggle: caught.wriggle ?? 0 } : { ...fishAt(i, t, this.props().pond), pitch: 0, wriggle: 0 };
       f.position.set(at.x, at.y, at.z);
-      f.rotation.y = at.heading;
+      f.rotation.set(-at.pitch, at.heading, 0, 'YXZ');
+      f.rotateY(at.wriggle);
+      f.userData.tail.rotation.y = tailSwing(i, t);
       this.alerts[i].visible = caught?.index === i && caught.alert;
       this.alerts[i].position.set(at.x, 0.45, at.z);
     });

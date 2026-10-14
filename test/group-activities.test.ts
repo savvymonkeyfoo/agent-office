@@ -8,7 +8,7 @@ import { find, ofType, office } from './office-sim.ts';
 
 const START = officeLayout(INITIAL_ROWS);
 const spot = (name: string) => START.hangouts.find((s) => s.name === name)!;
-const GROUPS = ['pool-dip', 'couch-co-op'];
+const GROUPS = ['couch-co-op'];
 
 /** `count` idle agents wandering for `minutes`; returns each update's events. */
 function busy(count: number, seed: number, minutes = 90) {
@@ -31,33 +31,34 @@ function untilGroup(o: ReturnType<typeof office>, name: string, players: number)
 }
 const n = (key: string) => Number(key.replace('session-', ''));
 
+// #89 reverses #32 here: the pool dip is no longer a group game; each idle agent takes a free ring on its own.
 describe('#32 AC1 pool dip', () => {
-  it('#32 AC1 starts only with 3 or 4 idle agents, one per ring, each floating', () => {
+  it('#32 AC1 (#89) four rings, one agent per ring, each floating, each getting in on its own', () => {
     expect(spot('pool-dip').places).toHaveLength(4);
     expect(spot('pool-dip').places.map((p) => p.pose)).toEqual(['floating', 'floating', 'floating', 'floating']);
-    let dips = 0;
-    for (const events of busy(8, 2)) {
-      const walks = ofType(events, 'walk').filter((w) => w.place?.spot === 'pool-dip');
-      if (!walks.length) continue;
-      expect(walks.length).toBeGreaterThanOrEqual(3);
-      expect(walks.length).toBeLessThanOrEqual(4);
-      expect(new Set(walks.map((w) => w.key)).size).toBe(walks.length);
-      expect(new Set(walks.map((w) => w.place)).size).toBe(walks.length);
-      dips++;
-    }
-    expect(dips).toBeGreaterThan(0);
+    const o = office(8, 2);
+    for (let n = 1; n <= 8; n++) o.set(n, 'done');
+    let shared = 0;
+    o.run(90 * 60, 0.25, () => {
+      const swimmers = [...o.c.agents.values()].filter((a) => a.place?.spot === 'pool-dip');
+      expect(new Set(swimmers.map((a) => a.place)).size, 'one per ring').toBe(swimmers.length);
+      if (swimmers.length >= 2) shared++;
+    });
+    const dips = ofType(o.log.map((l) => l.event), 'walk').filter((w) => w.place?.spot === 'pool-dip');
+    expect(dips.length).toBeGreaterThan(0);
+    expect(shared, 'swimmers share the pool now and then').toBeGreaterThan(0);
   });
 
-  it('#32 AC1 two idle agents never start a pool dip', () => {
+  it('#32 AC1 (#89) two idle agents can each take a dip on their own', () => {
     const walks = busy(2, 5, 180).flatMap((events) => ofType(events, 'walk'));
-    expect(walks.filter((w) => w.place?.spot === 'pool-dip')).toEqual([]);
+    expect(walks.filter((w) => w.place?.spot === 'pool-dip').length).toBeGreaterThan(0);
   });
 });
 
 describe('#32 AC2 couch co-op', () => {
-  it('#32 AC2 starts with 2–4 idle agents, seated on the sofa facing the TV', () => {
+  it('#32 AC2 (#112) starts with 2–3 idle agents, seated on the sofa facing the TV', () => {
     const places = spot('couch-co-op').places;
-    expect(places).toHaveLength(4);
+    expect(places).toHaveLength(3);
     const tv = START.lounge.tv;
     for (const p of places) {
       expect(p.sits).toBe(true);
@@ -65,14 +66,17 @@ describe('#32 AC2 couch co-op', () => {
       const toTv = Math.atan2(tv.x - p.x, tv.z - p.z);
       expect(Math.cos(p.yaw - toTv)).toBeGreaterThan(Math.cos(Math.PI / 4));
     }
+    // #89: players are called one at a time, so count who's on the sofa rather than walks in one update.
+    const o = office(8, 2);
+    for (let n = 1; n <= 8; n++) o.set(n, 'done');
     let games = 0;
-    for (const events of busy(8, 2)) {
-      const walks = ofType(events, 'walk').filter((w) => w.place?.spot === 'couch-co-op');
-      if (!walks.length) continue;
-      expect(walks.length).toBeGreaterThanOrEqual(2);
-      expect(walks.length).toBeLessThanOrEqual(4);
-      games++;
-    }
+    o.run(90 * 60, 0.25, () => {
+      const players = [...o.c.agents.values()].filter((a) => a.place?.spot === 'couch-co-op');
+      if (!players.length) return;
+      expect(players.length).toBeLessThanOrEqual(3);
+      if (players.length === 1) expect(players[0].chained, 'a lone player is on its way out').toBe(true);
+      else games++;
+    });
     expect(games).toBeGreaterThan(0);
   });
 
@@ -109,7 +113,7 @@ describe('#32 AC3 called back to work', () => {
     it(`#32 AC3 ${name}: the others keep going while 2 remain, then the last player moves on`, () => {
       const o = office(8, 2);
       for (let i = 1; i <= 8; i++) o.set(i, 'done');
-      const players = untilGroup(o, name, name === 'pool-dip' ? 3 : 2);
+      const players = untilGroup(o, name, 2);
       expect(players.length, 'the activity happened').toBeGreaterThanOrEqual(2);
       const remaining = [...players];
       while (remaining.length > 2) {
@@ -118,10 +122,13 @@ describe('#32 AC3 called back to work', () => {
       }
       const [last] = remaining.splice(1, 1);
       const events = o.set(n(remaining[0]), 'working');
-      const moveOn = ofType(events, 'walk').find((w) => w.key === last)!;
+      // #89: the last player follows 1–4 s later.
+      expect(ofType(events, 'walk').find((w) => w.key === last), 'not at once').toBeUndefined();
+      const moveOn = ofType(o.run(4.05, 0.05), 'walk').find((w) => w.key === last)!;
       expect(moveOn, 'the last player moves on').toBeDefined();
       expect(moveOn.place?.spot).not.toBe(name);
-      expect([...o.c.agents.values()].filter((a) => a.place?.spot === name)).toEqual([]);
+      // Only this game's players: others may start a new game on the free sofa straight away (#112).
+      expect(players.filter((k) => o.c.agents.get(k)?.place?.spot === name)).toEqual([]);
     });
   }
 });

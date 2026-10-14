@@ -114,3 +114,11 @@ describe('#26 AC5 no tool calls', () => {
     expect(activity('')).toEqual([]);
   });
 });
+
+describe('Windows paths', () => {
+  it('shows paths inside a Windows cwd relative to it, whatever the host', () => {
+    const cwd = 'C:\\Users\\alex\\demo';
+    const win = line({ type: 'assistant', cwd, message: { role: 'assistant', content: [call('Read', { file_path: 'C:\\Users\\alex\\demo\\src\\a.ts' }), call('Read', { file_path: 'D:\\other\\b.ts' })] } });
+    expect(parseDetails(win, cwd).activity).toEqual(['Read src\\a.ts', 'Read D:\\other\\b.ts']);
+  });
+});

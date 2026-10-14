@@ -101,7 +101,7 @@ describe('#59 AC3 no crowds setting off at once', () => {
 });
 
 describe('#59 AC4 pairs and groups still end together', () => {
-  it('#59 AC4 the players of a game all get the same end time', () => {
+  it('#59 AC4 the players of a game all get the same end time, then leave one after another (#89)', () => {
     const o = office(8, 2);
     for (let n = 1; n <= 8; n++) o.set(n, 'done');
     let games = 0;
@@ -109,7 +109,8 @@ describe('#59 AC4 pairs and groups still end together', () => {
       const bySpot = new Map<string, number[]>();
       for (const a of o.c.agents.values()) {
         const spot = SPOTS.find((s) => s.name === a.place?.spot);
-        if (spot?.game && a.nextAt != null) bySpot.set(spot.name, [...(bySpot.get(spot.name) ?? []), a.nextAt]);
+        // #89: once the first has gone, the rest follow 1–4 s apart (see set-off-spread.test.ts).
+        if (spot?.game && a.nextAt != null && !a.chained) bySpot.set(spot.name, [...(bySpot.get(spot.name) ?? []), a.nextAt]);
       }
       for (const [, ends] of bySpot) {
         if (ends.length < 2) continue;

@@ -30,6 +30,16 @@ export function driftAt(d: Drift, t: number): Afloat {
     x: settle * d.ax * Math.sin(d.wx * t + d.px),
     z: settle * d.az * Math.sin(d.wz * t + d.pz),
     spin: d.spin * t,
-    bob: Math.sin(1.5 * t + d.bob) * 0.03,
+    bob: settle * Math.sin(1.5 * t + d.bob) * 0.03,
   };
+}
+
+/** A ring someone is climbing into: back at home, square and level (#110). */
+export const CLIMBING_IN: Afloat = { x: 0, z: 0, spin: 0, bob: 0 };
+
+/** An empty ring's own lazy drift (#110), the same every time for the same ring, each turned its own way. */
+export function emptyDriftAt(ring: number, t: number): Afloat {
+  let seed = (ring + 1) * 104729;
+  const d = driftParams(() => (seed = (seed * 16807) % 2147483647) / 2147483647);
+  return { ...driftAt(d, t + SETTLE), spin: 0.2 * t + ring * 2.4 };
 }

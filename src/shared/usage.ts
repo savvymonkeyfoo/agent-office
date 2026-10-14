@@ -18,10 +18,22 @@ export interface ProjectTokens {
   tokens: number;
 }
 
+/** Cloud mode: the plan limit status sessions report. `status` is e.g. "allowed", "allowed_warning" or "rejected". */
+export interface CloudLimit {
+  status: string;
+  /** Epoch milliseconds, when known. */
+  resetsAt: number | null;
+  /** e.g. "five_hour". */
+  window: string | null;
+  overage: boolean;
+}
+
 /** What /api/usage (and POST /api/usage/enable) returns. */
 export interface UsagePayload {
   tracking: TrackingStatus;
   limits: Limits;
   /** This week's tokens, highest first. */
   projects: ProjectTokens[];
+  /** Present in cloud mode, where it replaces the local limit bars. */
+  cloud?: CloudLimit | null;
 }

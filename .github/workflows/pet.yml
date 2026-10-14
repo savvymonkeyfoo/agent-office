@@ -1,0 +1,39 @@
+name: Desktop pet
+on:
+  pull_request:
+  workflow_dispatch:
+jobs:
+  pet:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: sudo apt-get update && sudo apt-get install -y xvfb
+        if: runner.os == 'Linux'
+      - name: The pet starts, draws the office's pet page and saves a screenshot
+        shell: bash
+        env:
+          AGENT_PET_SCREENSHOT: ${{ runner.temp }}/pet.png
+        run: |
+          node bin/agent-office.js > office.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:4321/pet.html > /dev/null && break; sleep 1; done
+          if [ "$RUNNER_OS" = Linux ]; then
+            Xvfb :99 -screen 0 1280x800x24 & export DISPLAY=:99; sleep 2
+          fi
+          node scripts/pet.mjs run
+          for i in $(seq 1 60); do [ -s "$AGENT_PET_SCREENSHOT" ] && break; sleep 1; done
+          cat office.log
+          sleep 3; cat ~/.agent-office/pet/pet.log || true
+          test -s "$AGENT_PET_SCREENSHOT"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pet-${{ matrix.os }}
+          path: ${{ runner.temp }}/pet.png

@@ -27,10 +27,10 @@ export function seeded(seed: number) {
 }
 
 /** `count` agents, working at their desks when the page opened; `set` changes one, `run` ticks the clock. */
-export function office(count: number, seed = 1) {
+export function office(count: number, seed = 1, state: OfficeState = 'working') {
   const clock = { t: 0 };
   const c = new OfficeController({ now: () => clock.t, random: seeded(seed) });
-  const states = new Map(Array.from({ length: count }, (_, i) => [i + 1, 'working' as OfficeState]));
+  const states = new Map(Array.from({ length: count }, (_, i) => [i + 1, state]));
   const records = () => [...states].map(([n, s]) => rec(n, s));
   const log: { t: number; event: OfficeEvent }[] = [];
   const record = (events: OfficeEvent[]) => { events.forEach((event) => log.push({ t: clock.t, event })); return events; };

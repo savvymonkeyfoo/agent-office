@@ -170,3 +170,44 @@ describe('#58 AC7 the same seed and clock give the same fishing', () => {
     expect(steady).toBeGreaterThan(3);
   });
 });
+
+describe('#84 the float flies like a thrown object', () => {
+  const DT = 1e-3;
+  const y = (t: number) => castAt(PLAIN, t, PLACE).float!.y;
+
+  it('#84 AC1 at release the float moves vertically the same way as the rod tip', () => {
+    const tipVy = (castAt(PLAIN, T.release, PLACE).tip.y - castAt(PLAIN, T.release - DT, PLACE).tip.y) / DT;
+    const floatVy = (y(T.release + DT) - y(T.release)) / DT;
+    expect(Math.abs(tipVy)).toBeGreaterThan(0.1);
+    expect(Math.sign(floatVy)).toBe(Math.sign(tipVy));
+    expect(floatVy).toBeCloseTo(tipVy, 0);
+  });
+
+  it('#84 AC2 from release to landing the downward acceleration is constant, with at most one high point', () => {
+    const ts = Array.from({ length: 40 }, (_, i) => T.release + 0.02 + (i / 40) * (T.landed - T.release - 0.04));
+    const accel = ts.map((t) => (y(t + 0.01) - 2 * y(t) + y(t - 0.01)) / 1e-4);
+    for (const a of accel) {
+      expect(a).toBeLessThan(-1);
+      expect(a).toBeCloseTo(accel[0], 1);
+    }
+    const ys = ts.map(y);
+    const highs = ys.slice(1, -1).filter((v, i) => v > ys[i] && v >= ys[i + 2]).length;
+    expect(highs).toBeLessThanOrEqual(1);
+  });
+
+  it('#84 AC3 the float lands on the landing point at the landing time', () => {
+    for (const cast of [PLAIN, CATCH]) {
+      const f = castAt(cast, T.landed - 1e-6, PLACE).float!;
+      expect(Math.hypot(f.x - cast.landing.x, f.z - cast.landing.z)).toBeLessThan(0.01);
+      expect(Math.abs(f.y - 0.03)).toBeLessThan(0.01);
+    }
+  });
+
+  it('#84 AC4 after landing the float never rises more than 2 cm above the water until reeled in', () => {
+    for (const [cast, until] of [[PLAIN, T.reel], [CATCH, T.lift]] as const)
+      for (let t = T.landed; t < until; t += 0.01) {
+        const f = castAt(cast, t, PLACE).float!;
+        expect(f.y, `t=${t.toFixed(2)}`).toBeLessThanOrEqual(0.03 + 0.02);
+      }
+  });
+});

@@ -3,13 +3,21 @@
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "lib": ["ES2023"],
-    "types": ["node"],
+    "lib": [
+      "ES2023"
+    ],
+    "types": [
+      "node"
+    ],
     "strict": true,
     "skipLibCheck": true,
     "rootDir": "src",
     "outDir": "dist/node",
     "rewriteRelativeImportExtensions": true
   },
-  "include": ["src/server", "src/shared"]
+  "include": [
+    "src/server",
+    "src/shared",
+    "src/cloud"
+  ]
 }

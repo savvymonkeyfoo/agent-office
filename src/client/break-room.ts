@@ -1,10 +1,15 @@
 // Break-room props (#29), at their plan C positions. Each is tagged so route tests treat it as furniture.
 import * as THREE from 'three';
-import { at, ball, box, cyl, mesh, tag } from './toon.ts';
-import { BREAK_ROOM, type HangoutPlace, type SeatSpot } from './layout.ts';
-import { dartModel } from './character.ts';
-import { THROWS, dartFlight, dartsAt } from './darts.ts';
-import type { Afloat } from './float.ts';
+import { at, ball, box, cyl, mesh, part, tag } from './toon.ts';
+import { BREAK_ROOM, DARTS_LINE, type HangoutPlace, type Point, type Props, type SeatSpot } from './layout.ts';
+
+/** The floor's height under a point; the pieces below sit or fly above it (#103). */
+type Floor = (p: Point) => number;
+const flat: Floor = () => 0;
+import { dartModel, hoopsBall } from './character.ts';
+import { ballFlight, shotAt } from './hoops.ts';
+import { THROWS, dartFlight, dartsAt, stuckDart } from './darts.ts';
+import { emptyDriftAt, type Afloat } from './float.ts';
 import { POND_DEPTH, POOL_DEPTH, waterSurface } from './water.ts';
 import { CAST_SECONDS, castAt, type Cast, type CastFrame } from './fishing.ts';
 import { toonRamp } from './toon.ts';
@@ -15,7 +20,7 @@ import { BALL_R as PONG_BALL_R, NET_TOP, pongBallAt, type Rally } from './pong.t
 export class DeskMugs {
   private mugs = new Map<number, THREE.Object3D>();
 
-  constructor(private parent: THREE.Object3D) {}
+  constructor(private parent: THREE.Object3D, private floor: Floor = flat) {}
 
   set(seat: SeatSpot, on: boolean) {
     const old = this.mugs.get(seat.index);
@@ -27,8 +32,13 @@ export class DeskMugs {
     mug.add(at(cyl(0.05, 0.05, 0.01, '#6B4226', { outline: 0, shadow: false }), 0, 0.055, 0));
     // On the desk's corner by the sitter's right hand.
     const right = { x: -Math.cos(seat.yaw), z: Math.sin(seat.yaw) };
-    this.parent.add(at(mug, seat.desk.x + right.x * 0.42, 0.85, seat.desk.z + right.z * 0.42));
+    this.parent.add(at(mug, seat.desk.x + right.x * 0.42, this.floor(seat.desk) + 0.85, seat.desk.z + right.z * 0.42));
     this.mugs.set(seat.index, mug);
+  }
+
+  clear() {
+    this.mugs.forEach((mug) => this.parent.remove(mug));
+    this.mugs.clear();
   }
 }
 
@@ -37,12 +47,6 @@ const WOOD = '#C98A55';
 const WATER = '#8FD3F2';
 const FELT_TOP = 0.835;
 const RING_Y = 0.1;
-
-/** Marks a piece of a prop (not furniture of its own, so not tagged). */
-const part = <T extends THREE.Object3D>(obj: T, name: string) => {
-  obj.userData.part = name;
-  return obj;
-};
 
 /** The hammock trees' trunks taper from bottom to top; the ropes are tied on this high (#55). */
 const TRUNK = { bottom: 0.16, top: 0.11, height: 1.9 };
@@ -67,13 +71,13 @@ const turned = <T extends THREE.Object3D>(obj: T, yaw: number) => {
   return obj;
 };
 
-/** Loungers, pond and jetty, hammock, yoga mat, trampoline, dartboard, bin and paper stack (#30). */
-export function addSoloProps(group: THREE.Group) {
-  const { loungers, lounger, pond, jetty, hammock, yogaMat, trampoline, dartboard, bin, paperStack } = BREAK_ROOM;
+/** Loungers, pond and jetty, hammock, yoga mat, trampoline, dartboard and bin (#30). `pond: false` leaves the pond out (a layout with its own water). */
+export function addSoloProps(group: THREE.Group, props: Props, { pond: withPond = true } = {}) {
+  const { loungers, lounger, pond, jetty, hammock, yogaMat, trampoline, dartboard, bin } = props;
 
-  for (const { x, z } of loungers) group.add(at(sunLounger(), x, 0, z));
+  for (const { x, z } of loungers) group.add(at(sunLounger(lounger), x, 0, z));
 
-  group.add(at(buildPond(pond.rx, pond.rz), pond.x, 0, pond.z));
+  if (withPond) group.add(at(buildPond(pond.rx, pond.rz), pond.x, 0, pond.z));
   for (const [dx, dz] of [[-0.8, -0.3], [0.4, 0.45]]) {
     const pad = at(cyl(0.16, 0.16, 0.02, '#5FA35A', { outline: 0, shadow: false }), pond.x + dx, 0.05, pond.z + dz);
     group.add(pad);
@@ -130,7 +134,7 @@ export function addSoloProps(group: THREE.Group) {
   board.add(face);
   group.add(at(board, dartboard.x, 1.6, dartboard.z));
   // The throw line is tape on the floor: not furniture.
-  group.add(at(box(0.04, 0.005, 0.8, '#FF5A5A', { outline: 0, shadow: false }), -6.35, 0.004, dartboard.z));
+  group.add(at(box(0.04, 0.005, 0.8, '#FF5A5A', { outline: 0, shadow: false }), dartboard.x + DARTS_LINE + 0.25, 0.004, dartboard.z));
 
   const hoop = tag(new THREE.Group(), 'bin');
   hoop.add(at(cyl(0.22, 0.18, 0.5, '#6B5B95'), 0, 0.25, 0));
@@ -138,18 +142,12 @@ export function addSoloProps(group: THREE.Group) {
   rim.rotation.x = Math.PI / 2;
   rim.position.y = 0.51;
   hoop.add(rim);
-  hoop.add(at(box(0.04, 0.5, 0.6, '#FFFFFF', { outline: 0.03 }), -0.38, 1.0, 0)); // backboard on the wall
   group.add(at(hoop, bin.x, 0, bin.z));
-
-  const stack = tag(new THREE.Group(), 'paper-stack');
-  stack.add(at(box(0.35, 0.4, 0.35, WOOD), 0, 0.2, 0));
-  stack.add(at(box(0.28, 0.06, 0.2, '#FFFFFF', { outline: 0.04 }), 0, 0.43, 0));
-  group.add(turned(at(stack, paperStack.x, 0, paperStack.z), 0.2));
 }
 
 /** The pool table and ping-pong table (#31). */
-export function addGameTables(group: THREE.Group) {
-  const { poolTable: pool, pingPong: pong } = BREAK_ROOM;
+export function addGameTables(group: THREE.Group, props: Props) {
+  const { poolTable: pool, pingPong: pong } = props;
   const table = tag(new THREE.Group(), 'pool-table');
   table.add(at(box(pool.w, 0.18, pool.d, WOOD), 0, 0.72, 0));
   table.add(part(at(box(pool.w - 0.2, 0.03, pool.d - 0.2, '#3F8A5C', { outline: 0, shadow: false }), 0, 0.82, 0), 'felt'));
@@ -171,7 +169,7 @@ export class PoolBalls {
   /** Seconds into the rack; null while nobody plays. */
   private t: number | null = null;
 
-  constructor(parent: THREE.Object3D) {
+  constructor(parent: THREE.Object3D, private props: () => Props = () => BREAK_ROOM, private floor: Floor = flat) {
     parent.add(...this.meshes);
     this.place(0);
   }
@@ -189,9 +187,9 @@ export class PoolBalls {
   }
 
   private place(t: number) {
-    const { poolTable: table } = BREAK_ROOM;
+    const { poolTable: table } = this.props();
     ballsAt(t).forEach((b, i) => {
-      this.meshes[i].position.set(table.x + b.x, FELT_TOP + BALL_R, table.z + b.z);
+      this.meshes[i].position.set(table.x + b.x, this.floor(table) + FELT_TOP + BALL_R, table.z + b.z);
       this.meshes[i].visible = !b.potted;
     });
   }
@@ -203,14 +201,15 @@ export class PongBallMesh {
   private rally: Rally | null = null;
   private t = 0;
 
-  constructor(parent: THREE.Object3D) {
+  constructor(parent: THREE.Object3D, private props: () => Props = () => BREAK_ROOM, private floor: Floor = flat) {
     parent.add(this.mesh);
     this.mesh.visible = false;
   }
 
-  play(rally: Rally | null) {
+  /** Play `rally` from `from` seconds into it (before 0: the serve toss); null: nobody plays. */
+  play(rally: Rally | null, from = 0) {
     this.rally = rally;
-    this.t = 0;
+    this.t = from;
     this.update(0);
   }
 
@@ -218,7 +217,8 @@ export class PongBallMesh {
     this.t += dt;
     const at = this.rally && pongBallAt(this.rally, this.t);
     this.mesh.visible = !!at?.visible;
-    if (at) this.mesh.position.set(BREAK_ROOM.pingPong.x + at.x, at.y, BREAK_ROOM.pingPong.z + at.z);
+    const { pingPong } = this.props();
+    if (at) this.mesh.position.set(pingPong.x + at.x, this.floor(pingPong) + at.y, pingPong.z + at.z);
   }
 }
 
@@ -226,7 +226,7 @@ export class PongBallMesh {
 export class BoardDarts {
   readonly darts = Array.from({ length: THROWS }, () => dartModel());
 
-  constructor(parent: THREE.Object3D) {
+  constructor(parent: THREE.Object3D, private props: () => Props = () => BREAK_ROOM, private floor: Floor = flat) {
     parent.add(...this.darts);
     this.update(null);
   }
@@ -237,38 +237,91 @@ export class BoardDarts {
       const k = !round ? null : i < round.stuck ? 1 : round.flying?.index === i ? round.flying.k : null;
       dart.visible = k != null;
       if (k == null) return;
-      const { origin, dir } = dartFlight(thrower!.place, i, k);
-      dart.position.set(origin.x, origin.y, origin.z);
-      dart.lookAt(origin.x + dir.x, origin.y + dir.y, origin.z + dir.z);
+      const quiver = round!.quivering?.index === i ? round!.quivering.s : null;
+      const { origin, dir } = quiver != null ? stuckDart(thrower!.place, i, quiver, this.props().dartboard) : dartFlight(thrower!.place, i, k, this.props().dartboard);
+      dart.position.set(origin.x, origin.y + this.floor(origin), origin.z);
+      dart.lookAt(origin.x + dir.x, dart.position.y + dir.y, origin.z + dir.z);
     });
   }
 }
 
-/** Moves each pool ring with its rider's drift (#57), in pool-dip place order; an empty ring rests at home. */
-export function floatRings(group: THREE.Object3D, afloat: (Afloat | null)[]) {
-  const { pool } = BREAK_ROOM;
+/** The basketball once it leaves the shooter's hands (#73): in the air, then in the bin; none without a shooter. */
+export class BinBall {
+  readonly mesh = hoopsBall();
+
+  constructor(parent: THREE.Object3D, private props: () => Props = () => BREAK_ROOM, private floor: Floor = flat) {
+    parent.add(this.mesh);
+    this.update(null);
+  }
+
+  update(shooter: { place: HangoutPlace; t: number } | null) {
+    const shot = shooter && shotAt(shooter.t);
+    const k = !shot ? null : shot.landed ? 1 : shot.flying;
+    this.mesh.visible = k != null;
+    if (k == null) return;
+    const p = ballFlight(shooter!.place, k, this.props().bin);
+    this.mesh.position.set(p.x, this.floor(p) + p.y, p.z);
+  }
+}
+
+/** How fast a ring catches up with where it should be, so climbing in or out never makes it jump (#110). */
+const RING_CATCH_UP = { move: 0.5, spin: 1, bob: 0.1 };
+
+/**
+ * Moves each pool ring with its rider's drift (#57), in pool-dip place order; an empty ring drifts on
+ * its own (#110). `dt` (seconds since the last call) limits how far a ring goes towards a new motion.
+ */
+export function floatRings(group: THREE.Object3D, afloat: (Afloat | null)[], pool: Props['pool'] = BREAK_ROOM.pool, t = 0, dt = Infinity) {
   group.traverse((o) => {
     if (o.userData.kind !== 'pool-ring') return;
-    const i = o.userData.ring as number, home = pool.rings[i], a = afloat[i];
-    o.position.set(home.x - pool.x + (a?.x ?? 0), RING_Y + (a?.bob ?? 0), home.z - pool.z + (a?.z ?? 0));
-    o.rotation.z = a?.spin ?? 0;
+    const i = o.userData.ring as number, home = pool.rings[i];
+    const want = afloat[i] ?? emptyDriftAt(i, t), was: Afloat | undefined = o.userData.afloat;
+    const a: Afloat = !was || dt === Infinity ? want : {
+      x: toward(was.x, want.x, RING_CATCH_UP.move * dt),
+      z: toward(was.z, want.z, RING_CATCH_UP.move * dt),
+      spin: toward(was.spin, nearestTurn(want.spin, was.spin), RING_CATCH_UP.spin * dt),
+      bob: toward(was.bob, want.bob, RING_CATCH_UP.bob * dt),
+    };
+    o.userData.afloat = a;
+    o.position.set(home.x - pool.x + a.x, RING_Y + a.bob, home.z - pool.z + a.z);
+    o.rotation.z = a.spin;
   });
+}
+
+const toward = (from: number, to: number, step: number) => from + Math.max(-step, Math.min(step, to - from));
+/** `angle` give or take whole turns, the one nearest `to`: a ring looks the same a full turn round. */
+const nearestTurn = (angle: number, to: number) => angle + 2 * Math.PI * Math.round((to - angle) / (2 * Math.PI));
+
+/** A white ring lying on the water, for ripples and splashes. */
+function waterRing() {
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 32), new THREE.MeshBasicMaterial({ color: '#FFFFFF', transparent: true, depthWrite: false }));
+  ring.rotation.x = -Math.PI / 2;
+  ring.renderOrder = 2;
+  return ring;
+}
+
+function showRing(ring: ReturnType<typeof waterRing>, at: CastFrame['ripple']) {
+  ring.visible = !!at;
+  if (!at) return;
+  ring.position.set(at.x, 0.035, at.z);
+  ring.scale.setScalar(at.radius);
+  ring.material.opacity = at.opacity;
 }
 
 /** The angler's float, line and ripple (#58), following the cast the controller says. */
 export class FishingGear {
   readonly float = new THREE.Group();
   readonly line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: '#F4EEE2' }));
-  readonly ripple = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 32), new THREE.MeshBasicMaterial({ color: '#FFFFFF', transparent: true, depthWrite: false }));
+  readonly ripple = waterRing();
+  /** Where a caught fish bursts out or drops back in (#109). */
+  readonly splash = waterRing();
   private cast: { cast: Cast; place: HangoutPlace; start: number; t: number } | null = null;
   private now: CastFrame | null = null;
 
-  constructor(parent: THREE.Object3D) {
+  constructor(parent: THREE.Object3D, private props: () => Props = () => BREAK_ROOM, private floor: Floor = flat) {
     this.float.add(at(ball(0.04, '#FF5A5A', { outline: 0.08, shadow: false }), 0, 0.02, 0));
     this.float.add(at(ball(0.03, '#FFFFFF', { outline: 0.08, shadow: false }), 0, 0.06, 0));
-    this.ripple.rotation.x = -Math.PI / 2;
-    this.ripple.renderOrder = 2;
-    parent.add(this.float, this.line, this.ripple);
+    parent.add(this.float, this.line, this.ripple, this.splash);
     this.stop();
   }
 
@@ -280,7 +333,7 @@ export class FishingGear {
 
   stop() {
     this.cast = this.now = null;
-    this.float.visible = this.line.visible = this.ripple.visible = false;
+    this.float.visible = this.line.visible = this.ripple.visible = this.splash.visible = false;
   }
 
   /** The current moment of the cast, for the fish taking part in a catch. */
@@ -292,7 +345,7 @@ export class FishingGear {
     if (!this.cast) return;
     const c = this.cast;
     c.t = Math.min(c.t + dt, CAST_SECONDS);
-    const f = (this.now = castAt(c.cast, c.t, c.place, c.start));
+    const f = (this.now = castAt(c.cast, c.t, c.place, c.start, this.props().pond));
     this.float.visible = !!f.float;
     if (f.float) this.float.position.set(f.float.x, f.float.y, f.float.z);
     this.line.visible = true;
@@ -300,12 +353,8 @@ export class FishingGear {
     positions.setXYZ(0, f.tip.x, f.tip.y, f.tip.z);
     positions.setXYZ(1, f.lineEnd.x, f.lineEnd.y, f.lineEnd.z);
     positions.needsUpdate = true;
-    this.ripple.visible = !!f.ripple;
-    if (f.ripple) {
-      this.ripple.position.set(f.ripple.x, 0.035, f.ripple.z);
-      this.ripple.scale.setScalar(f.ripple.radius);
-      this.ripple.material.opacity = f.ripple.opacity;
-    }
+    showRing(this.ripple, f.ripple);
+    showRing(this.splash, f.splash);
   }
 
   lineEnds() {
@@ -315,8 +364,7 @@ export class FishingGear {
 }
 
 /** A sun lounger, head end at -z: a seat, and a backrest rising from it to the head end, propped up there (#64). */
-function sunLounger() {
-  const { w, d, seatTop, back } = BREAK_ROOM.lounger;
+function sunLounger({ w, d, seatTop, back }: Props['lounger']) {
   const thick = 0.08, { angle, length } = back;
   const hingeZ = -d / 2 + length * Math.cos(angle);
   const chair = tag(new THREE.Group(), 'sun-lounger');
@@ -371,8 +419,8 @@ function buildPond(rx: number, rz: number) {
 }
 
 /** The dog's bed and bowl (#34). */
-export function addPetCorner(group: THREE.Group) {
-  const { petBed, bowl } = BREAK_ROOM;
+export function addPetCorner(group: THREE.Group, props: Props) {
+  const { petBed, bowl } = props;
   const bed = tag(new THREE.Group(), 'pet-bed');
   const cushion = cyl(1, 1, 0.12, '#E2B347', { outline: 0.03 }, 32);
   cushion.scale.set(petBed.rx, 1, petBed.rz);
@@ -389,8 +437,8 @@ export function addPetCorner(group: THREE.Group) {
 }
 
 /** The pool with its four rubber rings (#32); couch co-op uses the lounge's sofa and TV. */
-export function addPool(group: THREE.Group) {
-  const { pool } = BREAK_ROOM;
+export function addPool(group: THREE.Group, props: Props) {
+  const { pool } = props;
   const basin = tag(new THREE.Group(), 'pool');
   // A sunken, tiled basin under see-through water (#63), framed by a coping around the hole in the deck.
   const [iw, id] = [pool.w - POOL_RIM * 2, pool.d - POOL_RIM * 2];

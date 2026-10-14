@@ -1,20 +1,26 @@
 import type { AgentRecord, OfficeState } from '../shared/agent.ts';
 import {
-  DOG_SPEED, INITIAL_ROWS, WALK_SPEED, along, arrivalPath, behindChair, officeLayout, pathLength, route, withoutLoops, yawTowards,
-  type DogSpot, type HangoutPlace, type HangoutPose, type Point, type SeatSpot,
+  DOG_SPEED, INITIAL_ROWS, WALK_SPEED, along, arrivalPath, fetchRun, officeLayout, overTheShoulder, pathLength, route, withoutLoops, yawTowards,
+  type DogSpot, type OfficeLayout, type HangoutPlace, type HangoutPose, type Point, type SeatSpot,
 } from './layout.ts';
 import { SHOT_COUNT, SHOT_SECONDS } from './pool.ts';
 import { hitter, rallySeconds, type Rally, type Side } from './pong.ts';
 import { RETURN_SECONDS, driftParams, type Drift } from './float.ts';
 import { CAST_SECONDS, landingFrom, type Cast } from './fishing.ts';
 import { FISH } from './water.ts';
+import { RELEASE_AT } from './fetch.ts';
 
 /** Seconds an idle agent waits at its desk before wandering off (AC: within 3 s). */
 const SET_OFF = { min: 1, max: 2.5 };
 /** Agents turning idle in the same update set off one after another, this far apart (#59). */
 const STAGGER = { min: 0.55, max: 1 };
-/** No two idle agents' next moves are closer than this, unless they're in the same game (#59). */
-const MOVE_GAP = 0.35;
+/**
+ * Two agents setting off on their own are at least this far apart (#59, #89): their moves are planned
+ * that far apart, and when plans still meet, one waits for the slot to come free.
+ */
+const MOVE_GAP = 2.1;
+/** Players called into a chat or game, or leaving one, set off one at a time this far apart (#89). */
+const GROUP_GAP = { min: 1.1, max: 2 };
 /** Seconds an idle agent stays at a spot. */
 const STAY = { min: 10, max: 30 };
 /** How often a due agent looks for someone to chat with, and how long to wait when every spot is full. */
@@ -71,6 +77,10 @@ export interface Occupant {
   reaction: Reaction | null;
   /** Just turned idle (or found idle on first load): it sets off at its own staggered time (#59). */
   settingOff?: boolean;
+  /** A walk decided now that starts at `at` (#89); till then the agent stays at `from` (null: its desk). */
+  queued?: { at: number; events: OfficeEvent[]; from: HangoutPlace | null };
+  /** Following others out of a chat or game: it sets off at `nextAt` without waiting for a free slot (#89). */
+  chained?: boolean;
 }
 
 export type OfficeEvent =
@@ -93,12 +103,13 @@ export type OfficeEvent =
   | { type: 'high-five'; key: string; to: string }
   /** A coffee mug appears on (or is cleared from) desk `desk`. */
   | { type: 'mug'; desk: number; on: boolean }
-  /** The dog runs along `path`, then lies down (in its bed) or stands. */
-  | { type: 'dog'; path: Point[]; lie: boolean }
-  /** Agent `key` throws a ball for the dog (the dog's run follows). */
-  | { type: 'fetch'; key: string }
-  /** Turn `shot` of the pool rack starts (#53); null: play stopped, the balls go back in the rack. */
-  | { type: 'pool'; shot: number | null }
+  /** The dog runs along `path` (setting off after `wait` seconds), then lies down (in its bed) or stands. */
+  | { type: 'dog'; path: Point[]; lie: boolean; wait?: number }
+  /** Agent `key` throws a ball for the dog to `to` (the dog's run follows). */
+  | { type: 'fetch'; key: string; to: Point }
+  /** Turn `shot` of the pool rack starts (#53), played by `shooter` (#76); null: play stopped, the balls go back in the rack. */
+  | { type: 'pool'; shot: number; shooter: string }
+  | { type: 'pool'; shot: null }
   /** A table-tennis rally starts (#70) between `players` (at the -x end, then the +x end); null: play stopped. */
   | { type: 'pong'; rally: Rally | null; players: [string, string] }
   /** How agent `key`'s ring will drift once it's afloat in the pool dip it's walking to (#57). */
@@ -133,12 +144,12 @@ const systemClock: Clock = { now: () => performance.now() / 1000, random: Math.r
 export class OfficeController {
   readonly agents = new Map<string, Occupant>();
   rows = INITIAL_ROWS;
-  layout = officeLayout(INITIAL_ROWS);
+  layout: OfficeLayout;
   private firstUpdate = true;
   /** The last set-off handed out in this update, so agents turning idle together are staggered (#59). */
   private lastSetOff = -Infinity;
-  /** When a chat or game was last started: one per moment, so a game's end doesn't set off a crowd (#59). */
-  private togetherAt = -Infinity;
+  /** The earliest another agent may set off on its own (#89). */
+  private slotAt = -Infinity;
   /** A helper was sent on an errand in this update or tick: one at a time, so a batch of state changes doesn't send a crowd (#59). */
   private errandSent = false;
   private clock: Clock;
@@ -152,7 +163,10 @@ export class OfficeController {
   /** When the sofa next cheers, if anyone's sitting there then (#61). */
   private cheerAt: number | null = null;
 
-  constructor(clock: Partial<Clock> = {}) {
+  /** `preset`: the office layout's preset id (classic if unknown). */
+  constructor(clock: Partial<Clock> = {}, private preset = 'classic') {
+    this.layout = officeLayout(INITIAL_ROWS, preset);
+    this.rows = this.layout.rows;
     this.clock = { ...systemClock, ...clock };
     const now = this.clock.now();
     this.dog = { spot: this.layout.dogSpots[0], lying: true, arrivesAt: now, nextAt: now + this.between(DOG_REST) };
@@ -169,7 +183,7 @@ export class OfficeController {
       if (listed.has(key)) continue;
       this.agents.delete(key);
       events.push({ type: 'leave', key, path: route(this.layout, this.whereNow(agent, now), this.layout.doorLink) });
-      this.endIfShortHanded(agent.place, now, events);
+      this.afterLeaving(agent.place, now, events);
       this.releaseOnlookers(key, now, events);
       this.clearMug(key, events);
     }
@@ -189,15 +203,35 @@ export class OfficeController {
     const now = this.clock.now();
     const events: OfficeEvent[] = [];
     this.errandSent = false;
-    for (const [key, agent] of this.agents) {
-      if (agent.nextAt != null && agent.nextAt <= now) this.wander(key, agent, now, events);
-      else this.act(key, agent, now, events);
+    this.startQueued(now, events);
+    const moved = new Set<Occupant>();
+    for (const [key, agent] of this.due(now)) {
+      // Moving one agent can move others (partners, players leaving with it): only those still due go.
+      if (agent.nextAt == null || agent.nextAt > now || !this.agents.has(key)) continue;
+      if (!agent.chained && now < this.slotAt) continue;
+      moved.add(agent);
+      this.wander(key, agent, now, events);
     }
+    for (const [key, agent] of this.agents) if (!moved.has(agent)) this.act(key, agent, now, events);
     this.moveDog(now, events);
     this.playPool(now, events);
     this.playPong(now, events);
     this.cheerOn(now, events);
     return events;
+  }
+
+  /** Idle agents whose time to move on has come, the longest waiting first. */
+  private due(now: number) {
+    return [...this.agents].filter(([, a]) => a.nextAt != null && a.nextAt <= now).sort(([, a], [, b]) => a.nextAt! - b.nextAt!);
+  }
+
+  /** Walks decided earlier whose time to start has come (#89). */
+  private startQueued(now: number, events: OfficeEvent[]) {
+    for (const agent of this.agents.values()) {
+      if (!agent.queued || agent.queued.at > now) continue;
+      events.push(...agent.queued.events);
+      agent.queued = undefined;
+    }
   }
 
   /** Every so often, everyone sitting on the sofa cheers together; with nobody there, the moment passes (#61). */
@@ -246,7 +280,7 @@ export class OfficeController {
       const breaker = players.find(([, a]) => a.place!.pose === 'cue-shot') ?? players[0];
       const other = players.find((p) => p !== breaker)!;
       this.pool = { players: [breaker[0], other[0]], turn: 0, nextAt: now + SHOT_SECONDS };
-      events.push({ type: 'pool', shot: 0 });
+      events.push({ type: 'pool', shot: 0, shooter: breaker[0] });
       return;
     }
     const pool = this.pool;
@@ -258,7 +292,7 @@ export class OfficeController {
     const turns = this.layout.poolTurns;
     this.step(waiter, turns[last].wait, now, events);
     this.step(shooter, turns[shot].shoot, now, events);
-    events.push({ type: 'pool', shot });
+    events.push({ type: 'pool', shot, shooter });
   }
 
   /** Walks a player straight to another place at the same table (its stay there is unchanged). */
@@ -290,6 +324,8 @@ export class OfficeController {
         agent.nextAt = this.setOffTime(now, STAY, agent);
       }
       events.push({ type: 'arrive', key, record, seat, path, walk: false, place });
+      // Found in a pool dip (a ring is anyone's since #89): it drifts like any swimmer (#57).
+      if (place?.pose === 'floating') events.push({ type: 'drift', key, drift: driftParams(this.clock.random) });
       return;
     }
     agent.walk = { path, origin: this.layout.doorLink, startedAt: now };
@@ -355,11 +391,11 @@ export class OfficeController {
   /** The dog runs to where the ball lands and back. */
   private fetch(key: string, now: number, events: OfficeEvent[]) {
     const dog = this.dog;
-    const out = route(this.layout, dog.spot.link, [dog.spot.fetch]);
-    const path = [...out, ...out.slice(0, -1).reverse()];
+    const path = fetchRun(this.layout, dog.spot);
     dog.lying = false;
-    dog.arrivesAt = now + pathLength(path) / DOG_SPEED;
-    events.push({ type: 'fetch', key }, { type: 'dog', path, lie: false });
+    // It sets off as the ball leaves the hand (#75).
+    dog.arrivesAt = now + RELEASE_AT + pathLength(path) / DOG_SPEED;
+    events.push({ type: 'fetch', key, to: dog.spot.fetch }, { type: 'dog', path, lie: false, wait: RELEASE_AT });
   }
 
   /** Idle agents react to another agent's state change (#33). */
@@ -378,10 +414,9 @@ export class OfficeController {
     const onlooker = this.pick(this.helpers(key));
     if (watched || !onlooker || this.errandSent) return;
     // One onlooker per desk, off to one side (#67).
-    const [spot] = behindChair(this.layout, agent.seat);
     const [k, a] = onlooker;
     this.errandSent = true;
-    this.send(k, a, errandPlace('over-the-shoulder', 'watching', spot, [spot], yawTowards(spot, agent.seat.desk)), now, events);
+    this.send(k, a, overTheShoulder(this.layout, agent.seat), now, events);
     a.nextAt = null;
     a.reaction = { kind: 'watch', target: key, done: true };
   }
@@ -444,7 +479,11 @@ export class OfficeController {
   }
 
   private wander(key: string, agent: Occupant, now: number, events: OfficeEvent[]) {
-    if (this.clock.random() < CHAT_CHANCE && this.togetherAt !== now && this.startTogether(key, agent, now, events)) return;
+    const spot = agent.place && this.spotOf(agent.place);
+    agent.chained = false;
+    // Leaving a chat or game (the others follow), it goes its own way: starting another would crowd the moment (#89).
+    const leavingOthers = !!(spot?.chat || spot?.game);
+    if (!leavingOthers && this.clock.random() < CHAT_CHANCE && this.startTogether(key, agent, now, events)) return;
     if (this.clock.random() < DOG_CHANCE && this.visitDog(key, agent, now, events)) return;
     const here = agent.place?.spot;
     const place = this.pick(this.freePlaces().filter((p) => this.isSolo(p) && p.spot !== here));
@@ -473,7 +512,8 @@ export class OfficeController {
    * at least MOVE_GAP from every other agent's next move, leaving out `except` (#59).
    */
   private stagger(from: number, { min, max }: { min: number; max: number }, except: Occupant[]) {
-    const others = [...this.agents.values()].filter((a) => a.nextAt != null && !except.includes(a)).map((a) => a.nextAt!);
+    const others = [...this.agents.values()].filter((a) => !except.includes(a))
+      .flatMap((a) => [a.nextAt, a.queued?.at]).filter((t): t is number => t != null);
     const want = from + this.between({ min, max });
     const clear = (t: number) => t >= from + min && others.every((o) => Math.abs(t - o) >= MOVE_GAP - 1e-9);
     const slots = [want, ...others.flatMap((o) => [o - MOVE_GAP, o + MOVE_GAP])].filter(clear);
@@ -484,7 +524,7 @@ export class OfficeController {
 
   /**
    * Starts a chat or game at a free spot, with enough free idle agents to start it (as many as
-   * it has places). A game's players all finish at the same time.
+   * it has places). The partners set off one at a time, and it runs from when the last arrives (#89).
    */
   private startTogether(key: string, agent: Occupant, now: number, events: OfficeEvent[]) {
     const free = this.freePlaces();
@@ -492,17 +532,15 @@ export class OfficeController {
     if (!spot) return false;
     const partners = this.shuffled(this.freeToJoin(key, now)).slice(0, spot.places.length - 1);
     if (partners.length + 1 < (spot.game?.min ?? spot.places.length)) return false;
-    this.togetherAt = now;
     const players: [string, Occupant][] = [[key, agent], ...partners];
-    // Partners first: sending the starter may end its old game, and those players then look for partners too.
-    for (let i = players.length - 1; i >= 0; i--) this.send(players[i][0], players[i][1], spot.places[i], now, events);
-    if (spot.game) {
-      // One end time that keeps every player's stay within STAY (when their arrivals are close enough).
-      const arrivals = players.map(([, a]) => a.arrivesAt);
-      const earliest = Math.max(...arrivals) + STAY.min, latest = Math.min(...arrivals) + STAY.max;
-      const end = this.stagger(0, { min: earliest, max: Math.max(earliest, latest) }, players.map(([, a]) => a));
-      for (const [, a] of players) a.nextAt = end;
-    }
+    let leaves = now;
+    players.forEach(([k, a], i) => {
+      if (i) leaves += this.between(GROUP_GAP);
+      this.send(k, a, spot.places[i], now, events, undefined, leaves - now);
+    });
+    // The first to go when it's over leads the others away (see `afterLeaving`).
+    const end = this.stagger(Math.max(...players.map(([, a]) => a.arrivesAt)), STAY, players.map(([, a]) => a));
+    for (const [, a] of players) a.nextAt = end;
     return true;
   }
 
@@ -516,11 +554,23 @@ export class OfficeController {
       && (!a.place || (this.isSolo(a.place) && now - a.arrivesAt >= STAY.min)));
   }
 
-  /** After a player leaves `left`, a game left with fewer than 2 players ends and the rest move on. */
-  private endIfShortHanded(left: HangoutPlace | null, now: number, events: OfficeEvent[]) {
-    if (!left || !this.spotOf(left)?.game) return;
-    const players = [...this.agents].filter(([, a]) => a.place?.spot === left.spot);
-    if (players.length >= 2) return;
+  /**
+   * After a player leaves a chat or game at `left`: when it was time to go, or too few are left to
+   * carry on (a game then stops), the rest follow one at a time (#89).
+   */
+  private afterLeaving(left: HangoutPlace | null, now: number, events: OfficeEvent[]) {
+    if (!left || !this.spotOf(left) || this.isSolo(left)) return;
+    const players = [...this.agents].filter(([, a]) => a.place?.spot === left.spot && !a.chained);
+    const shortHanded = players.length < 2;
+    const leavers = shortHanded ? players : players.filter(([, a]) => a.nextAt != null && a.nextAt <= now);
+    let leaves = now;
+    for (const [, a] of leavers) {
+      leaves += this.between(GROUP_GAP);
+      a.nextAt = leaves;
+      a.chained = true;
+    }
+    this.slotAt = Math.max(this.slotAt, leaves + MOVE_GAP);
+    if (!shortHanded) return;
     if (left.spot === 'pool-table' && this.pool) {
       this.pool = null;
       events.push({ type: 'pool', shot: null });
@@ -529,7 +579,6 @@ export class OfficeController {
       events.push({ type: 'pong', rally: null, players: this.pong.players });
       this.pong = null;
     }
-    for (const [key, agent] of players) this.wander(key, agent, now, events);
   }
 
   /** The hangout spot a place belongs to; none for an errand place (#33). */
@@ -543,24 +592,30 @@ export class OfficeController {
     return !!spot && !spot.chat && !spot.game;
   }
 
-  /** Walk the agent to `place` (null: its desk) from wherever it is now, by way of `via` if given. */
-  private send(key: string, agent: Occupant, place: HangoutPlace | null, now: number, events: OfficeEvent[], via?: HangoutPlace) {
+  /** Walk the agent to `place` (null: its desk) from wherever it is now, by way of `via` if given, setting off after `delay`. */
+  private send(key: string, agent: Occupant, place: HangoutPlace | null, now: number, events: OfficeEvent[], via?: HangoutPlace, delay = 0) {
     const origin = this.whereNow(agent, now);
     const to = place ? place.link : agent.seat.link;
     const path = via ? [...route(this.layout, origin, via.link), ...route(this.layout, via.link, to).slice(1)] : route(this.layout, origin, to);
     agent.reaction = null;
     agent.settingOff = false;
+    agent.chained = false;
     const left = agent.place;
+    const at = agent.queued ? agent.queued.from : agent.arrivesAt <= now ? left : null;
+    const leaves = now + delay;
     // Afloat in a pool dip, the agent paddles back to the ring's home spot before setting off (#57).
-    const setsOff = left?.pose === 'floating' && agent.arrivesAt <= now ? now + RETURN_SECONDS : now;
+    const setsOff = at?.pose === 'floating' ? leaves + RETURN_SECONDS : leaves;
     agent.place = place;
     agent.walk = { path, origin, startedAt: setsOff };
     agent.arrivesAt = setsOff + pathLength(path) / WALK_SPEED;
     agent.nextAt = place ? this.stagger(agent.arrivesAt, STAY, [agent]) : null;
     agent.actAt = agent.arrivesAt + this.between(PLANE_FIRST);
-    events.push({ type: 'walk', key, path, place });
-    if (place?.pose === 'floating') events.push({ type: 'drift', key, drift: driftParams(this.clock.random) });
-    if (left !== place) this.endIfShortHanded(left, now, events);
+    const walk: OfficeEvent[] = [{ type: 'walk', key, path, place }];
+    if (place?.pose === 'floating') walk.push({ type: 'drift', key, drift: driftParams(this.clock.random) });
+    agent.queued = delay > 0 ? { at: leaves, events: walk, from: at } : undefined;
+    if (!agent.queued) events.push(...walk);
+    this.slotAt = Math.max(this.slotAt, leaves + MOVE_GAP);
+    if (left !== place) this.afterLeaving(left, now, events);
   }
 
   /** Once arrived, an agent does its errand, or at the paper-plane place throws planes at the desks. */
@@ -573,7 +628,7 @@ export class OfficeController {
       return;
     }
     if (agent.place?.pose === 'fishing') {
-      const landing = landingFrom(this.clock.random);
+      const landing = landingFrom(this.clock.random, this.layout.props);
       const fish = this.clock.random() < CATCH_CHANCE ? Math.floor(this.clock.random() * FISH) : null;
       events.push({ type: 'cast', key, cast: { landing, fish } });
       agent.actAt = now + CAST_SECONDS;
@@ -590,6 +645,7 @@ export class OfficeController {
    */
   private whereNow(agent: Occupant, now: number): Point[] {
     const walk = agent.walk;
+    if (agent.queued) return walk!.origin;
     if (walk && now < agent.arrivesAt) {
       const { leg } = along(walk.path, (now - walk.startedAt) * WALK_SPEED);
       return withoutLoops([...walk.path.slice(0, leg + 1).reverse(), ...walk.origin.slice(1)]);
@@ -603,7 +659,8 @@ export class OfficeController {
    */
   private freePlaces() {
     const held = (p: HangoutPlace) => this.spotOf(p)?.game ? this.spotOf(p)!.places : [p];
-    const taken = [...this.agents.values()].flatMap((a) => (a.place ? held(a.place) : []));
+    // An agent yet to set off still holds the place it's at (#89).
+    const taken = [...this.agents.values()].flatMap((a) => [a.place, a.queued?.from].flatMap((p) => (p ? held(p) : [])));
     return this.layout.hangouts.flatMap((s) => s.places).filter((p) => taken.every((q) => Math.hypot(p.x - q.x, p.z - q.z) >= OVERLAP));
   }
 
@@ -645,9 +702,11 @@ export class OfficeController {
   private addRow(now: number, events: OfficeEvent[]) {
     const old = this.layout;
     this.rows += 1;
-    this.layout = officeLayout(this.rows);
+    this.layout = officeLayout(this.rows, this.preset);
     events.push({ type: 'rows', count: this.rows });
-    const places = old.hangouts.flatMap((s) => s.places), moved = this.layout.hangouts.flatMap((s) => s.places);
+    // Pool turns too: a player mid-game may be at any of them, and a layout can move the table (#100).
+    const placesIn = (l: OfficeLayout) => [...l.hangouts.flatMap((s) => s.places), ...l.poolTurns.flatMap((t) => [t.shoot, t.wait])];
+    const places = placesIn(old), moved = placesIn(this.layout);
     // The hall moves back, and the dog's hall spot with it.
     this.dog.spot = this.layout.dogSpots.find((s) => s.name === this.dog.spot.name)!;
     this.dog.arrivesAt = now;
@@ -656,12 +715,24 @@ export class OfficeController {
       agent.seat = this.layout.seats[agent.seat.index];
       const walking = agent.walk && now < agent.arrivesAt;
       if (!agent.place && !walking) continue;
-      agent.place = agent.place && (moved[places.indexOf(agent.place)] ?? agent.place); // errand places don't move
+      // Errand places by a desk stay put (seats don't move); one by the dog moves with its spot.
+      agent.place = agent.place && (moved[places.indexOf(agent.place)] ?? this.movedDogVisit(agent.place, old) ?? agent.place);
       agent.walk = undefined;
+      agent.queued = undefined;
       agent.arrivesAt = now;
       if (agent.place && agent.nextAt == null) agent.nextAt = this.stagger(now, STAY, [agent]);
       events.push({ type: 'place', key, seat: agent.seat, state: agent.record.state, place: agent.place });
     }
+  }
+
+  /** Where a visit to the dog at `place` in layout `old` is now (the lounge moves back with a new tier); null if it isn't one. */
+  private movedDogVisit(place: HangoutPlace, old: OfficeLayout) {
+    if (place.spot !== 'dog') return null;
+    const at = (v: { at: Point }) => v.at.x === place.x && v.at.z === place.z;
+    const spot = old.dogSpots.findIndex((d) => d.visitors.some(at));
+    if (spot < 0) return null;
+    const visit = this.layout.dogSpots[spot].visitors[old.dogSpots[spot].visitors.findIndex(at)];
+    return errandPlace('dog', place.pose, visit.at, visit.link, yawTowards(visit.at, this.layout.dogSpots[spot].dog));
   }
 }
 

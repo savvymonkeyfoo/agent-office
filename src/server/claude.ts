@@ -25,8 +25,8 @@ export function explainClaudeError(error: ExecError, command = 'claude'): string
 export function listClaudeAgents({ command, args }: Command = CLAUDE_AGENTS): Promise<AgentEntry[]> {
   return new Promise((resolve, reject) => {
     // On Windows, an npm-installed claude is a .cmd script, which only runs through the shell.
-    // The arguments are fixed, so the shell sees no user input.
-    const shell = process.platform === 'win32';
+    // The arguments are fixed, so the shell sees no user input. A full path to an .exe runs directly.
+    const shell = process.platform === 'win32' && !/\.exe$/i.test(command);
     execFile(command, args, { shell, timeout: 15_000, maxBuffer: 32 * 1024 * 1024, windowsHide: true }, (error, stdout, stderr) => {
       if (error) return reject(new Error(explainClaudeError(Object.assign(error, { stderr }), command)));
       try {
