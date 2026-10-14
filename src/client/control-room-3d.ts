@@ -520,11 +520,12 @@ function addConsoles(group: THREE.Group, layout: ControlRoomLayout): Seat[] {
     const row = rows[spot.row], y = layout.tiers[spot.row].height;
     const light = new StatusLight();
     row.add(turned(at(buildConsole(light), spot.desk.x, y, spot.desk.z), spot.yaw));
-    row.add(turned(at(buildChair(), spot.chair.x, y, spot.chair.z), spot.yaw));
+    const chair = turned(at(buildChair(), spot.chair.x, y, spot.chair.z), spot.yaw);
+    row.add(chair);
     const screen = new DeskScreen(spot.desk, spot.yaw);
     screen.root.position.y = y;
     row.add(screen.root);
-    return { ...spot, screen, light };
+    return { ...spot, screen, light, swivel: chair };
   });
 }
 

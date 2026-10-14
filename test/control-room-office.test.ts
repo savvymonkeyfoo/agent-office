@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { buildOffice, updateScreens } from '../src/client/office.ts';
+import { buildOffice, swivelChairs, updateScreens } from '../src/client/office.ts';
 import { arrivalPath, departurePath, fetchRun, route, type Point } from '../src/client/layout.ts';
 import { heightAt, type ControlRoomLayout } from '../src/client/control-room.ts';
 import { DOOR_REACH, STATUS_COLORS, STATUS_OFF, doorsOpen } from '../src/client/control-room-3d.ts';
@@ -8,6 +8,8 @@ import { allOnScreen, floorCorners, frameFloor, goHome, initialOrbit } from '../
 import type { OfficeState } from '../src/shared/agent.ts';
 import { obstaclesIn, routeCollisions } from './geometry.ts';
 import { find, rec } from './office-sim.ts';
+import { Character } from '../src/client/character.ts';
+import { lookFor } from '../src/client/look.ts';
 
 const build = (tiers = 3) => {
   const office = buildOffice(tiers, 'control-room');
@@ -331,5 +333,35 @@ describe('#101 AC4 the camera frames the whole office on load and after a tier i
     frameFloor(b, ob, 2, 'classic');
     expect(oa.radius).toBe(ob.radius);
     expect(floorCorners(2)).toEqual(floorCorners(2, 'classic'));
+  });
+});
+
+describe('an agent with a question in the control room', () => {
+  it('swivels its chair round to face the camera, at the same height, and waves; back to its console once answered', () => {
+    const { layout, seats } = build();
+    const camera = new THREE.PerspectiveCamera(34, 1.6, 0.1, 150);
+    frameFloor(camera, initialOrbit(), layout.rows, 'control-room');
+    for (const seat of seats) {
+      const agent = new Character(lookFor(`session-${seat.index}`));
+      agent.ground = (p) => heightAt(layout, p);
+      agent.sitAt(seat, 'working');
+      agent.update(0, 0.016);
+      const height = agent.root.position.y;
+      agent.setState('needs');
+      for (let t = 0; t < 2; t += 0.05) agent.update(t, 0.05);
+      swivelChairs(seats, [agent]);
+      expect([agent.mode, agent.pose, agent.bubbleKind]).toEqual(['seated', 'waving', 'needs']);
+      expect(agent.root.position.y).toBeCloseTo(height);
+      const facing = new THREE.Vector3(Math.sin(agent.root.rotation.y), 0, Math.cos(agent.root.rotation.y));
+      const toCamera = camera.position.clone().sub(agent.root.position).setY(0).normalize();
+      expect(facing.dot(toCamera), `seat ${seat.index} faces the camera`).toBeGreaterThan(0.7);
+      expect(seat.swivel!.rotation.y, 'the chair turns with it').toBeCloseTo(agent.root.rotation.y);
+      agent.setState('working');
+      for (let t = 2; t < 4; t += 0.05) agent.update(t, 0.05);
+      swivelChairs(seats, [agent]);
+      expect([agent.mode, agent.pose]).toEqual(['seated', 'typing']);
+      expect(agent.root.rotation.y).toBeCloseTo(seat.yaw);
+      expect(seat.swivel!.rotation.y).toBeCloseTo(seat.yaw);
+    }
   });
 });

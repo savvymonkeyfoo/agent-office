@@ -233,6 +233,12 @@ export class Character {
     else if (this.mode === 'standing' && state !== 'finished') this.hopToPlace();
   }
 
+  /** Which way it faces in its chair: in the control room, one with a question swivels round to the room. */
+  private seatedYaw() {
+    const seat = this.seat!;
+    return this.state === 'needs' && seat.askYaw !== undefined ? seat.askYaw : seat.yaw;
+  }
+
   /** A table-tennis rally starts now, `from` seconds into it, with this agent at end `side` (#70); null: play stopped. */
   playRally(rally: Rally | null, side: Side, from = 0) {
     this.rally = rally && { rally, side, t: from };
@@ -382,13 +388,13 @@ export class Character {
     const standing = this.state === 'finished';
     this.mode = standing ? 'standing' : 'seated';
     this.root.position.copy(standing ? this.above(seat.standSpot) : this.above(seat.sit, SEAT_Y));
-    this.root.rotation.y = standing ? 0 : seat.yaw;
+    this.root.rotation.y = standing ? 0 : this.seatedYaw();
   }
 
   private hopToPlace() {
     const seat = this.seat!;
     const standing = this.state === 'finished';
-    this.hop(standing ? this.above(seat.standSpot) : this.above(seat.sit, SEAT_Y), standing ? 0 : seat.yaw, () => this.settle());
+    this.hop(standing ? this.above(seat.standSpot) : this.above(seat.sit, SEAT_Y), standing ? 0 : this.seatedYaw(), () => this.settle());
   }
 
   /** `y` above the floor at `p`. */
@@ -441,6 +447,7 @@ export class Character {
     if (this.mode === 'walking' || this.mode === 'hopping' || this.mode === 'exiting') this.locomote(dt);
 
     if (this.mode === 'seated') {
+      this.root.rotation.y = lerpAngle(this.root.rotation.y, this.seatedYaw(), Math.min(1, dt * 5)); // swivels round
       fl.position.set(-0.16, -0.24, 0.34);
       fr.position.set(0.16, -0.24, 0.34);
       const pose = POSES[this.state].pose;

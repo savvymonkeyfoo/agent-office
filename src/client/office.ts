@@ -20,6 +20,15 @@ export interface Seat extends SeatSpot {
   screen: DeskScreen;
   /** The console's status light (Control room). */
   light?: StatusLight;
+  /** The chair, which swivels with its sitter (Control room). */
+  swivel?: THREE.Object3D;
+}
+
+/** Turns each swivel chair with whoever sits in it; empty or left chairs face their console. Call every frame. */
+export function swivelChairs(seats: Seat[], sitters: Iterable<{ seat?: SeatSpot; mode: string; root: THREE.Object3D }>) {
+  const turned = new Map<number, number>();
+  for (const s of sitters) if (s.seat && s.mode === 'seated') turned.set(s.seat.index, s.root.rotation.y);
+  for (const seat of seats) if (seat.swivel) seat.swivel.rotation.y = turned.get(seat.index) ?? seat.yaw;
 }
 
 /**
