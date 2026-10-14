@@ -51,23 +51,25 @@ In cloud mode, clicking an agent shows its progress checklist plus links to its 
 
 This uses the same unpublished endpoint `claude --teleport` uses, so a Claude Code update could break it.
 
-## Desktop pet (Mac)
+## Desktop pet
 
 A little office character that floats on your desktop, so you can see what the office is up to without opening it.
 It types away while agents are working, waves with an amber bubble when a session has a question for you, sips a coffee when all's quiet, and dozes if the office stops.
 When a session finishes, it says so for a few seconds. Hover over it to see what's going on.
 
 ```sh
-scripts/pet.sh run        # build it and put it on your desktop
-scripts/pet.sh install    # same, and start it at login
-scripts/pet.sh uninstall
+node scripts/pet.mjs run        # put it on your desktop
+node scripts/pet.mjs install    # same, and start it at login
+node scripts/pet.mjs uninstall
 ```
 
 Drag it anywhere; it remembers where you left it and stays above other windows on every desktop.
 Click it to open the session that's waiting on you (or the office). Right-click to switch between the office worker and the office dog, change its size, or quit.
 Clicks anywhere else in its window go through to whatever's behind.
 
-The office must be running (it draws the office's `/pet.html` page). Building needs `swiftc` from Xcode's command line tools (`xcode-select --install`).
+The office must be running (it draws the office's `/pet.html` page).
+On a Mac it's a small native app (`mac/`, built by `scripts/pet.sh`), which needs `swiftc` from Xcode's command line tools (`xcode-select --install`).
+On Windows and Linux it runs `desktop-pet/` in Electron, which the script downloads once into `~/.agent-office/pet` (about 100 MB), so the office itself stays small.
 Set `AGENT_OFFICE_URL` if the office isn't on `http://127.0.0.1:4321`.
 
 ## Cloud sessions (claude.ai artifact)

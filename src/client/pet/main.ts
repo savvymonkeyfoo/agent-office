@@ -14,9 +14,10 @@ const PEEK_MS = 5000;
 /** How often to pick up projects hidden or shown again in the office. */
 const HIDDEN_POLL_MS = 10_000;
 
-/** The Mac app's side (mac/AgentPet.swift): it moves the window and opens links; absent in a plain browser. */
+/** The desktop app's side (mac/AgentPet.swift, or desktop-pet/ on Windows and Linux): it moves the window and opens links; absent in a plain browser. */
 interface NativeBridge { postMessage(message: unknown): void }
-const native = (window as { webkit?: { messageHandlers?: { pet?: NativeBridge } } }).webkit?.messageHandlers?.pet ?? null;
+const host = window as { webkit?: { messageHandlers?: { pet?: NativeBridge } }; petNative?: NativeBridge };
+const native = host.webkit?.messageHandlers?.pet ?? host.petNative ?? null;
 
 export interface Rect { x: number; y: number; width: number; height: number }
 
@@ -26,7 +27,7 @@ export interface PetOptions {
   officeUrl: string;
   createScene?: (host: HTMLElement, kind: PetKind) => PetScene;
   open?: (url: string) => void;
-  /** Tells the Mac app which parts of the window are the pet, so clicks elsewhere go through to what's behind. */
+  /** Tells the desktop app which parts of the window are the pet, so clicks elsewhere go through to what's behind. */
   reportHitAreas?: (rects: Rect[]) => void;
 }
 
@@ -116,7 +117,7 @@ export function startPet(root: HTMLElement, { kind, officeUrl, createScene = cre
     open(asking && /^(session|cse)_/.test(asking.sessionId) ? sessionUrl(asking) : officeUrl);
   }
 
-  /** The pointer is over the pet: say what's going on. The Mac app calls this itself, since its window takes the mouse. */
+  /** The pointer is over the pet: say what's going on. The desktop app calls this itself, since its window takes the mouse. */
   function hover(on: boolean) {
     hovering = on;
     render();
@@ -153,7 +154,7 @@ if (!import.meta.env.VITEST) {
       officeUrl: new URL('/', location.href).href,
       reportHitAreas: native ? (rects) => native.postMessage({ type: 'hit', rects }) : undefined,
     });
-    // In a plain browser the page handles its own clicks; in the Mac app the window does (it also drags).
+    // In a plain browser the page handles its own clicks; in the desktop app the window does (it also drags).
     if (!native) root.addEventListener('click', () => pet.click());
     Object.assign(window, { pet: { click: pet.click, hover: pet.hover, applyFeed: pet.applyFeed } });
     const events = new EventSource('/api/events');
