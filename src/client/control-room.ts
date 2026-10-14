@@ -183,7 +183,7 @@ function seatsFor(tiers: { radius: number }[]): SeatSpot[] {
     const angle = offset / r;
     const desk = onArc(r, angle), chair = onArc(r + CHAIR_BEHIND, angle), approach = onArc(r + CHAIR_BEHIND + APPROACH, angle);
     return {
-      index: row * OFFSETS.length + i, row, desk, chair, yaw: yawTowards(chair, desk), sit: chair, approach, standSpot: approach,
+      index: row * OFFSETS.length + i, row, desk, chair, yaw: yawTowards(chair, desk), sit: chair, approach, standSpot: approach, askYaw: yawTowards(desk, chair),
       link: [chair, approach, onArc(r + LANE_BEHIND, angle)],
     };
   }));
