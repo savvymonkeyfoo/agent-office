@@ -6,6 +6,7 @@ import { mountProjectFilter, serverHiddenSync } from './projects.ts';
 import { hasWebGL } from './webgl.ts';
 import { sessionUrl } from '../cloud/sessions.ts';
 import { startClock } from './clock.ts';
+import { bindPetButton } from './pet-button.ts';
 import type { AgentRecord, FeedPayload } from '../shared/agent.ts';
 
 export { hasWebGL };
@@ -93,6 +94,8 @@ const idleDemo = import.meta.env.DEV ? Number(new URLSearchParams(location.searc
 if (!import.meta.env.VITEST) {
   startUsagePanel(document.getElementById('usage')!);
   startClock(document.querySelector('.brand h1')!);
+  const petButton = document.getElementById('pet');
+  if (petButton instanceof HTMLButtonElement) bindPetButton(petButton);
   const app = boot();
   // Dev only (#102): `officeFeed([...records])` feeds the office by hand, e.g. to fill the screen wall.
   if (import.meta.env.DEV && app) Object.assign(window, { officeFeed: app.applyFeed });

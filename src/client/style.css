@@ -163,6 +163,12 @@ a.btn { display: inline-flex; align-items: center; text-decoration: none; box-si
   position: absolute; right: 68px; top: calc(16px + env(safe-area-inset-top, 0px));
   min-width: 44px; min-height: 44px; display: grid; place-items: center;
 }
+/* Bring back the desktop pet, left of the close-up button; only once the pet is set up here. */
+.pet {
+  position: absolute; right: 172px; top: calc(16px + env(safe-area-inset-top, 0px));
+  min-width: 44px; min-height: 44px; display: grid; place-items: center;
+}
+.pet[hidden] { display: none; }
 
 .status {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);

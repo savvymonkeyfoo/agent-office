@@ -3,6 +3,7 @@ import type { ApiHandler } from './http.ts';
 import type { Feed } from './feed.ts';
 import type { AckStore } from './acknowledged.ts';
 import { projectList, type HiddenProjectsStore } from './hidden-projects.ts';
+import type { PetLauncher } from './pet.ts';
 import { isThisMachine } from './tracking.ts';
 
 export interface UsageApi {
@@ -16,7 +17,7 @@ const MAX_BODY = 4096;
 const MAX_PROJECTS_BODY = 64 * 1024;
 const MAX_ID = 200;
 
-export function createApi(feed: Feed, acknowledged?: AckStore, usage?: UsageApi, hiddenProjects?: HiddenProjectsStore): ApiHandler {
+export function createApi(feed: Feed, acknowledged?: AckStore, usage?: UsageApi, hiddenProjects?: HiddenProjectsStore, pet?: PetLauncher): ApiHandler {
   return async (req, res) => {
     const path = new URL(req.url ?? '/', 'http://local').pathname;
 
@@ -47,6 +48,21 @@ export function createApi(feed: Feed, acknowledged?: AckStore, usage?: UsageApi,
       send(feed.current());
       const unsubscribe = feed.subscribe(send);
       req.on('close', unsubscribe);
+      return true;
+    }
+
+    if (req.method === 'GET' && path === '/api/pet' && pet) {
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+      res.end(JSON.stringify({ available: pet.available() }));
+      return true;
+    }
+
+    if (req.method === 'POST' && path === '/api/pet/show' && pet) {
+      // Starts a program: JSON only (no cross-site posts) and never from another machine.
+      if (!req.headers['content-type']?.startsWith('application/json')) return reply(res, 415, 'Send JSON.');
+      if (!isThisMachine(req.socket.remoteAddress)) return reply(res, 403, 'The pet can only be started on this computer.');
+      if (!pet.show()) return reply(res, 409, "The desktop pet isn't set up here yet: run node scripts/pet.mjs install.");
+      res.writeHead(204).end();
       return true;
     }
 
