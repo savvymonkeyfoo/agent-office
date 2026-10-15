@@ -67,6 +67,8 @@ Drag it anywhere; it remembers where you left it and stays above other windows o
 Click it to open the session that's waiting on you (or the office). Right-click to switch between the office worker and the office dog, change its size, or quit.
 Clicks anywhere else in its window go through to whatever's behind.
 
+Quit it and it stays off until you log in again. To bring it back sooner, click the paw button at the top right of the office (it appears once the pet is set up), or on a Mac open Agent Pet from Spotlight.
+
 The office must be running (it draws the office's `/pet.html` page).
 On a Mac it's a small native app (`mac/`, built by `scripts/pet.sh`), which needs `swiftc` from Xcode's command line tools (`xcode-select --install`).
 On Windows and Linux it runs `desktop-pet/` in Electron, which the script downloads once into `~/.agent-office/pet` (about 100 MB), so the office itself stays small.
