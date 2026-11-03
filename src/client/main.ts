@@ -4,7 +4,7 @@ import { renderCard, showTooltip } from './card.ts';
 import { startUsagePanel } from './usage.ts';
 import { mountProjectFilter, serverHiddenSync } from './projects.ts';
 import { hasWebGL } from './webgl.ts';
-import { sessionUrl } from '../cloud/sessions.ts';
+import { sessionUrl, appUrl } from '../cloud/sessions.ts';
 import { startClock } from './clock.ts';
 import { bindPetButton } from './pet-button.ts';
 import { mountLabPanels } from './lab-panels.ts';
@@ -58,6 +58,7 @@ export function boot({ createOffice }: BootOptions = {}) {
       toggleMessage: () => { expanded = !expanded; select(selected); },
       // Cloud sessions (ids like session_… or cse_…) open on claude.ai instead of `claude attach`.
       openLink: /^(session|cse)_/.test(selected) ? sessionUrl : undefined,
+      appLink: /^(session|cse)_/.test(selected) ? appUrl : undefined,
     });
   }
 

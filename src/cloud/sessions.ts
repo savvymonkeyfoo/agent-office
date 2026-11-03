@@ -1,4 +1,4 @@
-import type { AgentRecord, OfficeState } from '../shared/agent.ts';
+import type { AgentRecord, OfficeState, Question } from '../shared/agent.ts';
 
 /** The parts of a Claude Code cloud session (from the Claude Code Remote `list_sessions` tool) the office uses. */
 export interface CloudSession {
@@ -23,6 +23,8 @@ export interface CloudSession {
     rate_limit_info?: { status?: string; resetsAt?: number; rateLimitType?: string; isUsingOverage?: boolean };
     artifacts?: { title?: string; url?: string }[];
   };
+  /** Filled in from the session's latest events while it waits on you. */
+  question?: Question;
 }
 
 const HOUR = 3600_000;
@@ -93,6 +95,7 @@ export function toCloudRecord(session: CloudSession): AgentRecord {
     progress: cloudProgress(session),
     links: cloudLinks(session),
     ...(session.tags?.includes('hearth-overview') && { coordinator: true }),
+    ...(state === 'needs' && session.question && { question: session.question }),
   };
 }
 
@@ -127,3 +130,44 @@ export function sessionsFromPayload(payload: unknown): CloudSession[] {
 
 /** Code-session ids (cse_…) and session ids (session_…) name the same session; claude.ai links use the latter. */
 export const sessionUrl = (record: AgentRecord) => `https://claude.ai/code/${encodeURIComponent(record.sessionId.replace(/^cse_/, 'session_'))}`;
+/** The same session in the Claude desktop app, through the claude:// links it registers. */
+export const appUrl = (record: AgentRecord) => sessionUrl(record).replace(/^https:\/\//, 'claude://');
+
+const QUESTION_CHARS = 4000;
+const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, QUESTION_CHARS) : null);
+
+/**
+ * What a waiting session last asked, from its events newest first (GET /v1/code/sessions/{id}/events):
+ * a Projects decision card (`ask_decision`: question, context and options), else a Projects thread
+ * reply, else the agent's last plain text.
+ */
+export function questionFromEvents(events: unknown[]): Question | null {
+  for (const event of events) {
+    const payload = (event as { payload?: { type?: string; message?: { content?: unknown } } } | null)?.payload;
+    if (payload?.type !== 'assistant' || !Array.isArray(payload.message?.content)) continue;
+    const blocks = [...payload.message.content].reverse() as { type?: string; name?: string; text?: string; input?: Record<string, unknown> }[];
+    for (const block of blocks) {
+      const input = block.input ?? {};
+      if (block.type === 'tool_use' && block.name?.endsWith('ask_decision')) {
+        const question = str(input.question);
+        if (!question) continue;
+        const recommended = typeof input.recommended === 'number' ? input.recommended : -1;
+        const options = (Array.isArray(input.options) ? input.options : []).flatMap((o: { label?: unknown; consequence?: unknown }, i) => {
+          const label = str(o?.label);
+          return label ? [{ label, ...(str(o.consequence) && { consequence: str(o.consequence)! }), ...(i === recommended && { recommended: true }) }] : [];
+        });
+        const context = str(input.context);
+        return { text: context ? `${question}\n\n${context}` : question, ...(options.length && { options }) };
+      }
+      if (block.type === 'tool_use' && block.name?.endsWith('hearthbot__reply')) {
+        const text = str(input.text);
+        if (text) return { text };
+      }
+      if (block.type === 'text') {
+        const text = str(block.text);
+        if (text) return { text };
+      }
+    }
+  }
+  return null;
+}

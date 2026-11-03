@@ -98,6 +98,10 @@ body { background: var(--bg); color: var(--ink); font-family: var(--body); overf
 .pill.stale { background: #4A4466; color: #D9D3E6; }
 .pill.finished { background: var(--blue); color: #FFFFFF; }
 .desc { min-width: 0; font-size: 14px; line-height: 1.5; color: var(--ink); overflow-wrap: anywhere; }
+.options { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.options li { padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; line-height: 1.4; }
+.options li.recommended { border-color: #F08A24; }
+.options li span:last-child:not(.dim) { display: block; color: var(--muted); }
 .desc.collapsed { max-height: 6em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 60%, transparent); mask-image: linear-gradient(#000 60%, transparent); }
 .desc > :first-child { margin-top: 0; }
 .desc > :last-child { margin-bottom: 0; }
