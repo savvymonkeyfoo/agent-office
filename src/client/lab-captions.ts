@@ -8,7 +8,7 @@ import { taskLine } from './lab-board.ts';
 /** Captions are cut to this many characters (the card has the rest). */
 const CAPTION_CHARS = 32;
 /** Metres above an agent's feet. */
-const ABOVE = 2.15;
+const ABOVE = 2.8;
 
 export const captionText = (r: AgentRecord) => {
   const line = taskLine(r);

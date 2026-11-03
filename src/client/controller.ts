@@ -706,8 +706,17 @@ export class OfficeController {
     const used = new Set([...this.agents.values()].map((o) => o.seat.pod));
     const find = () => {
       const mine = podsOf(project);
-      return this.layout.seats.find((s) => !taken.has(s.index) && mine.has(s.pod))
-        ?? this.layout.seats.find((s) => !used.has(s.pod));
+      const own = this.layout.seats.find((s) => !taken.has(s.index) && mine.has(s.pod));
+      if (own) return own;
+      const open = this.layout.seats.filter((s) => !used.has(s.pod));
+      if (!mine.size || !('pods' in this.layout)) return open[0];
+      // A busy project's next pod goes beside one it has: the same row first, then the nearest (#lab).
+      const pods = this.layout.pods;
+      const apart = (s: SeatSpot) => Math.min(...[...mine].map((m) => {
+        const a = pods[s.pod!], b = pods[m!];
+        return Math.abs(a.row - b.row) * 100 + Math.abs(a.x - b.x);
+      }));
+      return open.reduce<SeatSpot | undefined>((best, s) => (!best || apart(s) < apart(best) ? s : best), undefined);
     };
     if (!find()) this.addRow(now, events);
     return find()!;

@@ -67,7 +67,7 @@ export function createOfficeScene(host: HTMLElement) {
   /** A new character, standing on the floor. */
   const newCharacter = (key: string, coordinator = false) => {
     const look = lookFor(key, coordinator);
-    const character = new Character(theme ? theme.costume(look, lookNumber(key)) : look, { trickOrTreat: !!theme?.trickOrTreat });
+    const character = new Character(theme ? theme.costume(look, lookNumber(key)) : look, { trickOrTreat: !!theme?.trickOrTreat, bot: preset === 'lab' });
     character.ground = floor;
     return character;
   };

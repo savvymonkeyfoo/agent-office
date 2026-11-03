@@ -5,6 +5,7 @@ import type { Look, HatKind } from './look.ts';
 import { BREAK_ROOM, WALK_SPEED, rejoin, yawTowards, type HangoutPlace, type HangoutPose, type Point, type SeatSpot } from './layout.ts';
 import { POSES, type BubbleKind, type Pose } from './poses.ts';
 import { bubbleTexture } from './bubbles.ts';
+import { BOT_METAL, BotHead } from './bot-face.ts';
 import { CROSS_SECONDS, FREE_HAND, HIT, PLAYER_X, hitTimes, hitter, pongBallAt, rallySeconds, reactionAt, shuffleAt, tossHand, type Rally, type Side } from './pong.ts';
 import { RETURN_SECONDS, driftAt, type Afloat, type Drift } from './float.ts';
 import { ROD_HAND, ROD_LENGTH, rodPitch, type Cast } from './fishing.ts';
@@ -75,7 +76,9 @@ export class Character {
 
   readonly pivot = new THREE.Group();
   readonly head = new THREE.Group();
-  private eyes: THREE.Mesh[];
+  private eyes: THREE.Mesh[] = [];
+  /** The Innovation lab's screen face, in place of the round head (#lab). */
+  private bot: BotHead | null = null;
   readonly hands: THREE.Mesh[];
   readonly feet: THREE.Mesh[];
   private mug = new THREE.Group();
@@ -126,7 +129,7 @@ export class Character {
   /** Seconds since the agent started leaving; its bubble pops, then stays gone (#49). */
   private leftFor: number | null = null;
 
-  constructor(look: Look, { trickOrTreat = false } = {}) {
+  constructor(look: Look, { trickOrTreat = false, bot = false } = {}) {
     this.root.add(this.pivot);
     const body = mesh(new THREE.CapsuleGeometry(0.36, 0.3, 8, 20), look.shirt);
     body.position.y = 0.53;
@@ -139,26 +142,13 @@ export class Character {
 
     this.head.position.y = 1.27;
     this.pivot.add(this.head);
-    this.head.add(ball(0.38, look.skin));
-    this.eyes = [-1, 1].map((side) => {
-      const eye = at(new THREE.Mesh(new THREE.SphereGeometry(0.055, 16, 12), new THREE.MeshBasicMaterial({ color: '#241C2F' })), 0.13 * side, 0.04, 0.345);
-      eye.scale.set(0.85, 1.25, 0.5);
-      eye.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.018, 8, 6), new THREE.MeshBasicMaterial({ color: '#FFFFFF' })), 0.015, 0.02, 0.04));
-      this.head.add(eye);
-      return eye;
-    });
-    for (const side of [-1, 1]) {
-      const cheek = at(new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 8), new THREE.MeshBasicMaterial({ color: '#F49AA0' })), 0.23 * side, -0.08, 0.3);
-      cheek.scale.set(1.3, 0.75, 0.4);
-      this.head.add(cheek);
-    }
-    const mouth = at(new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.014, 6, 12, Math.PI), new THREE.MeshBasicMaterial({ color: '#241C2F' })), 0, -0.1, 0.365);
-    mouth.rotation.z = Math.PI;
-    this.head.add(mouth);
-    this.head.add(hat(look.hat, look.hatColor));
+    if (bot) {
+      this.bot = new BotHead(look.shirt);
+      this.head.add(this.bot.group);
+    } else this.faceAndHat(look);
 
     this.hands = [0, 1].map(() => {
-      const hand = ball(0.12, look.skin, { outline: 0.08 });
+      const hand = ball(0.12, bot ? BOT_METAL : look.skin, { outline: 0.08 });
       this.root.add(hand);
       return hand;
     });
@@ -187,6 +177,27 @@ export class Character {
     this.bubble.scale.set(BUBBLE_SIZE, BUBBLE_SIZE, 1);
     this.bubble.renderOrder = 10;
     this.root.add(this.bubble);
+  }
+
+  /** The usual round face: eyes, cheeks, a smile and a hat. */
+  private faceAndHat(look: Look) {
+    this.head.add(ball(0.38, look.skin));
+    this.eyes = [-1, 1].map((side) => {
+      const eye = at(new THREE.Mesh(new THREE.SphereGeometry(0.055, 16, 12), new THREE.MeshBasicMaterial({ color: '#241C2F' })), 0.13 * side, 0.04, 0.345);
+      eye.scale.set(0.85, 1.25, 0.5);
+      eye.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.018, 8, 6), new THREE.MeshBasicMaterial({ color: '#FFFFFF' })), 0.015, 0.02, 0.04));
+      this.head.add(eye);
+      return eye;
+    });
+    for (const side of [-1, 1]) {
+      const cheek = at(new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 8), new THREE.MeshBasicMaterial({ color: '#F49AA0' })), 0.23 * side, -0.08, 0.3);
+      cheek.scale.set(1.3, 0.75, 0.4);
+      this.head.add(cheek);
+    }
+    const mouth = at(new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.014, 6, 12, Math.PI), new THREE.MeshBasicMaterial({ color: '#241C2F' })), 0, -0.1, 0.365);
+    mouth.rotation.z = Math.PI;
+    this.head.add(mouth);
+    this.head.add(hat(look.hat, look.hatColor));
   }
 
   get pose(): Pose | HangoutPose | 'walking' {
@@ -439,6 +450,7 @@ export class Character {
     const blinking = this.blinkAt < 0;
     if (this.blinkAt < -0.12) this.blinkAt = 2 + Math.random() * 4;
     this.eyes.forEach((e) => { e.scale.y = blinking ? 0.15 : 1.25; });
+    this.bot?.update(this.state, tt, blinking);
 
     if (this.growing) {
       this.scale = Math.min(1, this.scale + dt * 2.5);
