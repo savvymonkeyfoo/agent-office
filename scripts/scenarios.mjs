@@ -30,6 +30,8 @@ const many = (p, n, state = 'working') => Array.from({ length: n }, (_, i) => re
 
 export const scenarios = {
   one: [{ at: 0, records: room(1, 2) }],
+  // Everyone busy, nobody waiting: no pop-up, so the whole room shows.
+  calm: [{ at: 0, records: room(5, 2).map((r) => ({ ...r, state: 'working' })) }],
   five: [{ at: 0, records: room(5, 2) }],
   twelve: [{ at: 0, records: room(12, 2) }],
   // Uneven: one busy project (8 sessions, then 10) next to a small one (2) and a single.

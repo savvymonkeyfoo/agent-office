@@ -1,6 +1,7 @@
 // The Innovation lab preset's floor plan: a copy of the Control room (control-room.ts), reskinned.
-// One flat, warm room. Desks stand in pods of three, each pod on its own rug and given to one
-// project at a time; pods sit in rows facing the board on the back wall (-z). A walkway runs
+// One flat, warm room. Each project sits at a round oak island: three seats round its back half,
+// facing the camera across the table, on a round rug under a floating name ring. Islands sit in rows
+// in front of the board on the back wall (-z). A walkway runs
 // along the front of the board from the entrance (left wall) to the side door (right wall), an
 // aisle down each side, and a lane behind each row of chairs. The break corner (kitchen, sofa,
 // games) is behind the desks, and the deck outside the side door keeps its pool and lake.
@@ -18,23 +19,30 @@ export const PODS_PER_ROW = 3;
 const SEATS_PER_ROW = PER_POD * PODS_PER_ROW;
 
 const ROOM = { left: -11, right: 11, back: -8.6 };
-/** Pod centres across a row, and desk offsets within a pod (centre to centre). */
+/** Island centres across a row. */
 const POD_X = [-6.2, 0, 6.2];
-const DESK_OFFSETS = [-1.6, 0, 1.6];
-const DESK = { w: 1.4, d: 0.75 };
-/** The first row's desks stand this far from the back wall; later rows ROW_GAP behind. */
-const FIRST_DESK_Z = -4.2;
-const ROW_GAP = 3.8;
-const CHAIR_BEHIND = 0.95;
-const APPROACH = 0.6;
-/** Each row's walkway, behind its chairs. */
-const LANE_BEHIND = 1.9;
+/** The round table, where each seat's screen and keyboard stand on it, the chairs, and where a sitter steps out to. */
+export const ISLAND = { r: 1.0, height: 0.74 };
+const SCREEN_R = 0.66;
+const SEAT_R = 1.6;
+const APPROACH_R = 2.2;
+/** Seats round the island's back half (radians from straight back, -z), so sitters face the camera. */
+const SEAT_ANGLES = [-0.95, 0, 0.95];
+/** Each seat's screen and keyboard footprint on the table. */
+const DESK = { w: 0.7, d: 0.45 };
+/** The first row's islands stand this far from the back wall; later rows ROW_GAP behind. */
+const FIRST_DESK_Z = -3.9;
+const ROW_GAP = 4.7;
+/** Each row's walkway, on the board side of its chairs. */
+const LANE_AHEAD = 2.7;
+/** The maker bench at the break corner's front right: its middle (x), how far back (u), width and depth. */
+export const MAKER = { x: 9.4, u: 5.85, w: 2.2, d: 0.65 };
+/** An island's round rug reaches under its chairs. */
+export const RUG_R = 2.1;
 /** The side aisles, from the front walkway down to the break corner. */
 const AISLE_X = 9.6;
 /** The walkway along the front of the board, from the entrance to the side door. */
 const FRONT_Z = -6.6;
-/** A pod's rug reaches this far in front of its desks and behind them (over its lane, short of the next row's rug). */
-const RUG = { front: 0.8, back: 2.5, side: 0.95 };
 /** The break corner: this far behind the last lane, and this deep. */
 const CORNER_GAP = 1.0;
 const CORNER_DEPTH = 6.2;
@@ -52,12 +60,12 @@ const DECK_END_X = 21.4;
 export type LabLayout = ReturnType<typeof labLayout>;
 
 const deskZ = (row: number) => FIRST_DESK_Z + row * ROW_GAP;
-const laneZ = (row: number) => deskZ(row) + LANE_BEHIND;
+const laneZ = (row: number) => deskZ(row) - LANE_AHEAD;
 
 /** The Innovation lab with `rows` rows of pods (at least LAB_INITIAL_ROWS). */
 export function labLayout(rows: number) {
   const rowCount = Math.max(rows, LAB_INITIAL_ROWS);
-  const loungeFront = laneZ(rowCount - 1) + CORNER_GAP;
+  const loungeFront = deskZ(rowCount - 1) + RUG_R + CORNER_GAP;
   const corner = {
     name: 'break corner', x0: ROOM.left, x1: ROOM.right, z0: loungeFront, z1: loungeFront + CORNER_DEPTH, height: 0,
     /** Its side walls rise this far (the dart board hangs on the left one). */
@@ -72,8 +80,7 @@ export function labLayout(rows: number) {
   const lanes = Array.from({ length: rowCount }, (_, row) => lane(row));
   const pods = Array.from({ length: rowCount * PODS_PER_ROW }, (_, i) => {
     const row = Math.floor(i / PODS_PER_ROW), x = POD_X[i % PODS_PER_ROW], z = deskZ(row);
-    const half = DESK_OFFSETS.at(-1)! + DESK.w / 2 + RUG.side;
-    return { index: i, row, x, z, seats: seats.filter((s) => s.pod === i).map((s) => s.index), rug: { x0: x - half, x1: x + half, z0: z - RUG.front, z1: z + RUG.back } };
+    return { index: i, row, x, z, r: ISLAND.r, seats: seats.filter((s) => s.pod === i).map((s) => s.index), rug: { x0: x - RUG_R, x1: x + RUG_R, z0: z - RUG_R, z1: z + RUG_R } };
   });
   const props = propsFor(inLounge);
   const lounge = { tv: { ...inLounge(3.2, 5.98), w: 2.6 }, sofa: { ...inLounge(3.2, 3.5), w: 2.8 }, rug: inLounge(3.2, 4.4) };
@@ -111,6 +118,7 @@ export function labLayout(rows: number) {
     lanes,
     kitchen,
     cooler,
+    maker: { ...inLounge(MAKER.x, MAKER.u), w: MAKER.w, d: MAKER.d },
     bookshelf: { ...inLounge(ROOM.left + 0.22, 4.6), length: 1.6 },
     lounge,
     /** The board on the back wall. */
@@ -132,28 +140,30 @@ export function labLayout(rows: number) {
   };
 }
 
-/** Where a paper plane aimed at `seat` lands: on the floor in front of its desk (its desk may be packed away). */
-export const labPlaneLanding = (seat: SeatSpot): Point => ({ x: seat.desk.x, z: seat.desk.z - DESK.d / 2 - 0.5 });
+/** Where a paper plane aimed at `seat` lands: on the floor just outside its chair (its seat may be packed away). */
+export const labPlaneLanding = (seat: SeatSpot): Point => ({ ...seat.approach });
 
 function seatsFor(rows: number): (SeatSpot & { pod: number })[] {
   return Array.from({ length: rows * SEATS_PER_ROW }, (_, index) => {
     const row = Math.floor(index / SEATS_PER_ROW), inRow = index % SEATS_PER_ROW;
     const podInRow = Math.floor(inRow / PER_POD);
-    const x = POD_X[podInRow] + DESK_OFFSETS[inRow % PER_POD], z = deskZ(row);
-    const desk = { x, z }, chair = { x, z: z + CHAIR_BEHIND }, approach = { x, z: z + CHAIR_BEHIND + APPROACH };
+    const centre = { x: POD_X[podInRow], z: deskZ(row) }, a = SEAT_ANGLES[inRow % PER_POD];
+    const out = (r: number): Point => ({ x: centre.x + Math.sin(a) * r, z: centre.z - Math.cos(a) * r });
+    const desk = out(SCREEN_R), chair = out(SEAT_R), approach = out(APPROACH_R);
     return {
       index, row, pod: row * PODS_PER_ROW + podInRow, desk, chair, yaw: yawTowards(chair, desk), sit: chair, approach, standSpot: approach,
       askYaw: yawTowards(desk, chair),
-      link: [chair, approach, { x, z: laneZ(row) }],
+      link: [chair, approach, { x: approach.x, z: laneZ(row) }],
     };
   });
 }
 
-/** A row's walkway behind its chairs, from the left aisle to the right one. */
+/** A row's walkway on the board side of its chairs, from the left aisle to the right one. */
 function lane(row: number): Point[] {
   const z = laneZ(row);
-  const behind = POD_X.flatMap((px) => DESK_OFFSETS.map((dx) => ({ x: px + dx, z })));
-  return [{ x: -AISLE_X, z }, ...behind, { x: AISLE_X, z }];
+  const off = SEAT_ANGLES.map((a) => Math.sin(a) * APPROACH_R);
+  const ahead = POD_X.flatMap((px) => off.map((dx) => ({ x: px + dx, z })));
+  return [{ x: -AISLE_X, z }, ...ahead, { x: AISLE_X, z }];
 }
 
 /** Break-corner props move back with it; deck props stay. */
@@ -170,7 +180,7 @@ function propsFor(inLounge: (x: number, u: number) => Point): Props {
     trampoline: { x: 13.9, z: 5.6, r: 0.85 },
     /** On the break corner's left wall. */
     dartboard: inLounge(ROOM.left, 2.4),
-    bin: inLounge(8.4, 5.4),
+    bin: inLounge(5.4, 5.4),
     petBed: { x: 11.9, z: -1.0, rx: 0.45, rz: 0.32 },
     bowl: { x: 11.95, z: -0.35, r: 0.13 },
     poolTable: { ...inLounge(-0.6, 3.3), w: 1.2, d: 2.2 },
@@ -247,6 +257,8 @@ function hangoutsFor({ props, lounge, kitchen, cooler, poolTurns, inLounge, toPr
     solo('hoops', 'shooting-hoops', { x: bin.x + HOOPS_LINE, z: bin.z }, left, toPromenade({ x: bin.x + HOOPS_LINE, z: bin.z }).slice(1)),
     // Thrown from the front of the break corner, towards the desks.
     { name: 'planes', chat: false, places: [-7.8, -3.0, 3.0, 7.8].map((x) => standing('planes', inLounge(x, 0.4), 'throwing-plane', Math.PI)) },
+    // The maker corner (#lab): watching the 3D printer and the robot arm at work.
+    { name: 'maker', chat: false, places: [standing('maker', inLounge(MAKER.x - 0.4, 5.05), 'watching'), standing('maker', inLounge(MAKER.x + 0.5, 5.05), 'watching')] },
     { name: 'pool-table', chat: false, game: { min: 2 }, places: [poolTurns[0].shoot, poolTurns[1].wait] },
     { name: 'ping-pong', chat: false, game: { min: 2 }, places: [pongEnd(pong.x - PLAYER_X), pongEnd(pong.x + PLAYER_X)] },
     {
