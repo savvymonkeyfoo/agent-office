@@ -153,8 +153,8 @@ function seatsFor(rows: number): (SeatSpot & { pod: number })[] {
     const out = (r: number): Point => ({ x: centre.x + Math.sin(a) * r, z: centre.z - Math.cos(a) * r });
     const desk = out(SCREEN_R), chair = out(SEAT_R), approach = out(APPROACH_R);
     return {
+      // Chairs sit behind their island facing the camera, so one with a question waves from where it is (no askYaw).
       index, row, pod: row * PODS_PER_ROW + podInRow, desk, chair, yaw: yawTowards(chair, desk), sit: chair, approach, standSpot: approach,
-      askYaw: yawTowards(desk, chair),
       link: [chair, approach, { x: approach.x, z: laneZ(row) }],
     };
   });
