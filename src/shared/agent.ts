@@ -22,6 +22,13 @@ export interface AgentRecord extends SessionRecord {
   links?: { label: string; url: string }[];
   /** Cloud sessions: a Projects coordinator, the agent you talk to in a project's main chat. */
   coordinator?: boolean;
+  /** Cloud sessions waiting on you: what the agent asked, in full, and a decision card's options. */
+  question?: Question;
+}
+
+export interface Question {
+  text: string;
+  options?: { label: string; consequence?: string; recommended?: boolean }[];
 }
 
 /** What /api/agents returns and the event stream sends. */

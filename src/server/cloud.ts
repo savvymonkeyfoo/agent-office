@@ -8,7 +8,8 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AgentRecord } from '../shared/agent.ts';
-import { buildCloudList, type CloudSession } from '../cloud/sessions.ts';
+import { buildCloudList, mapCloudState, questionFromEvents, type CloudSession } from '../cloud/sessions.ts';
+import type { Question } from '../shared/agent.ts';
 import { claudeConfigDir } from './transcript.ts';
 
 // Not ANTHROPIC_BASE_URL: that often points at a work gateway (e.g. Foundry) that can't see claude.ai sessions.
@@ -316,7 +317,31 @@ export async function listCloudSessions(env: NodeJS.ProcessEnv = process.env): P
   for (const session of coordinatorSessions) byId.set(session.id, session);
   const sessions = [...byId.values()];
   await lookUpProjects(sessions, login);
+  await lookUpQuestions(sessions, login);
   return nameProjects(sessions, []);
+}
+
+/** What each waiting session asked, keyed `id@updated_at` so it's fetched once per turn. */
+const questions = new Map<string, Question | null>();
+const QUESTION_LOOKUPS = 8;
+
+/** Reads the latest events of sessions waiting on you for their full question, a few per poll. */
+async function lookUpQuestions(sessions: CloudSession[], login: Login) {
+  const waiting = sessions.filter((s) => mapCloudState(s) === 'needs');
+  const key = (s: CloudSession) => `${s.id}@${s.updated_at ?? ''}`;
+  const todo = waiting.filter((s) => !questions.has(key(s))).slice(0, QUESTION_LOOKUPS);
+  await Promise.all(todo.map(async (s) => {
+    try {
+      const res = await request(`/v1/code/sessions/${encodeURIComponent(s.id)}/events?limit=30&sort_order=desc`, login, false);
+      const body = res.ok ? await res.json() as { data?: unknown } : null;
+      questions.set(key(s), Array.isArray(body?.data) ? questionFromEvents(body.data) : null);
+    } catch {
+      questions.set(key(s), null);
+    }
+  }));
+  const live = new Set(waiting.map(key));
+  for (const k of questions.keys()) if (!live.has(k)) questions.delete(k);
+  for (const s of waiting) s.question = questions.get(key(s)) ?? undefined;
 }
 
 /** Each session's updated_at from the last fetch, so a "Got it" lasts only until the session moves on. */

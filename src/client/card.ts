@@ -1,4 +1,4 @@
-import type { AgentRecord, OfficeState } from '../shared/agent.ts';
+import type { AgentRecord, OfficeState, Question } from '../shared/agent.ts';
 import { escapeHtml, renderMarkdown } from './markdown.ts';
 import { clampTooltip } from './camera.ts';
 
@@ -19,6 +19,8 @@ interface CardActions {
   toggleMessage(): void;
   /** Replaces the `claude attach` command with a link, e.g. to a cloud session on claude.ai. */
   openLink?: (record: AgentRecord) => string;
+  /** The same session in the desktop app, offered next to `openLink`. */
+  appLink?: (record: AgentRecord) => string;
 }
 
 const PREVIEW_LINES = 4;
@@ -47,6 +49,17 @@ function messageSection(text: string | null, expanded: boolean) {
   return `<div class="section"><span class="label">Last message</span><div class="desc${collapsed}">${renderMarkdown(text)}</div>${toggle}</div>`;
 }
 
+/** What a waiting agent asked, in full, with a decision card's options (answered in the session itself). */
+function questionSection(question: Question, expanded: boolean) {
+  const long = isLong(question.text);
+  const collapsed = long && !expanded ? ' collapsed' : '';
+  const toggle = long ? `<button class="btn link" data-more aria-expanded="${expanded}">${expanded ? 'Show less' : 'Show more'}</button>` : '';
+  const options = question.options?.length
+    ? `<ul class="options">${question.options.map((o) => `<li${o.recommended ? ' class="recommended"' : ''}><strong>${escapeHtml(o.label)}</strong>${o.recommended ? ' <span class="dim">(recommended)</span>' : ''}${o.consequence ? `<span>${escapeHtml(o.consequence)}</span>` : ''}</li>`).join('')}</ul>`
+    : '';
+  return `<div class="section"><span class="label">${question.options?.length ? 'Its question' : 'What it said'}</span><div class="desc${collapsed}">${renderMarkdown(question.text)}</div>${toggle}${options}</div>`;
+}
+
 export const attachCommand = (record: AgentRecord) => `claude attach ${record.id}`;
 export const canDismiss = (record: AgentRecord) => record.state === 'finished' || record.state === 'stale';
 
@@ -64,11 +77,11 @@ export function renderCard(card: HTMLElement, record: AgentRecord, actions: Card
       <span class="pill ${record.state}">${STATE_LABEL[record.state]}</span>
     </div>
     ${progressSection(record)}
-    ${messageSection(record.lastMessage, actions.expanded)}
+    ${record.question ? questionSection(record.question, actions.expanded) : messageSection(record.lastMessage, actions.expanded)}
     <div class="section">
       <span class="label">Pick it up</span>
       ${actions.openLink
-        ? `<div class="links"><a class="btn primary" href="${escapeHtml(actions.openLink(record))}" target="_blank" rel="noopener">Open session</a>${linkButtons(record)}</div>`
+        ? `<div class="links">${actions.appLink ? `<a class="btn primary" href="${escapeHtml(actions.appLink(record))}">Open in app</a>` : ''}<a class="btn${actions.appLink ? '' : ' primary'}" href="${escapeHtml(actions.openLink(record))}" target="_blank" rel="noopener">${actions.appLink ? 'Open in browser' : 'Open session'}</a>${linkButtons(record)}</div>`
         : `<div class="command"><code>${escapeHtml(command)}</code><button class="btn" data-copy>Copy</button></div>`}
     </div>
     ${canDismiss(record) || (actions.openLink && record.state !== 'working') ? '<div><button class="btn primary" data-ack>Got it</button></div>' : ''}`;

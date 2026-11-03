@@ -4,7 +4,7 @@ import './style.css';
 import { createOfficeScene } from './office-scene.ts';
 import { renderCard, showTooltip } from './card.ts';
 import { hasWebGL } from './webgl.ts';
-import { buildCloudList, sessionsFromPayload, sessionUrl } from '../cloud/sessions.ts';
+import { buildCloudList, sessionsFromPayload, sessionUrl, appUrl } from '../cloud/sessions.ts';
 import type { AgentRecord } from '../shared/agent.ts';
 
 const SERVER = 'Claude Code Remote';
@@ -88,6 +88,7 @@ async function start() {
       expanded,
       toggleMessage: () => { expanded = !expanded; select(selected); },
       openLink: sessionUrl,
+      appLink: appUrl,
     });
   }
 
