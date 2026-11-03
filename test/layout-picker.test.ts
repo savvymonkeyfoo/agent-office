@@ -21,9 +21,9 @@ const setup = (storage?: Pick<Storage, 'getItem' | 'setItem'>) => {
 };
 
 describe('#104 layout picker', () => {
-  it('#104 AC1 the picker lists Classic and Control room and marks the current one', () => {
+  it('#104 AC1 the picker lists Classic, Control room and the Innovation lab, and marks the current one', () => {
     const { host, marked, button } = setup(memoryStorage());
-    expect([...host.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Classic', 'Control room']);
+    expect([...host.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Classic', 'Control room', 'Innovation lab']);
     expect(marked()).toEqual(['Control room']);
     button('Classic').click();
     expect(marked()).toEqual(['Classic']);

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { INITIAL_ROWS, WALL_HEIGHT, officeLayout } from './layout.ts';
+import { savedTilt } from './lab-tilt.ts';
 
 /** How far the camera can zoom, in metres from its target. Narrow screens may raise `max` to fit the floor (#22). */
 export const ZOOM = { min: 6, max: 45 };
@@ -16,6 +17,9 @@ const HOME_PULL_BACK = 1.15;
 export interface FloorBounds { left: number; right: number; back: number; front: number }
 
 export interface Orbit { theta: number; phi: number; radius: number; target: THREE.Vector3; maxRadius: number; bounds: FloorBounds }
+
+/** The Innovation lab's tilt (picked with its slider) as an orbit angle from straight down. */
+export const labPhi = (deg = savedTilt()) => THREE.MathUtils.degToRad(90 - deg);
 
 /** The starting (and reset) view looks at the office square-on, this many degrees below horizontal. */
 export const HOME_LOOK_DOWN = 25;
@@ -111,7 +115,7 @@ export const blockContextMenu = (canvas: EventTarget) => canvas.addEventListener
 export function goHome(camera: THREE.PerspectiveCamera, orbit: Orbit, rows: number, preset = 'classic') {
   const start = initialOrbit();
   orbit.theta = start.theta;
-  orbit.phi = start.phi;
+  orbit.phi = preset === 'lab' ? labPhi() : start.phi;
   orbit.target.copy(start.target);
   frameFloor(camera, orbit, rows, preset);
 }
@@ -122,6 +126,13 @@ export const CLOSE_UP = { lookDown: 36, zoom: 0.8 };
 /** Turns a framed starting view into the close-up one, centred on the room (x = 0) rather than the room plus deck. */
 export function closeUp(camera: THREE.PerspectiveCamera, orbit: Orbit, preset = 'classic') {
   // Classic's deck is in front of the room, not beside it, so it only needs pulling in a little.
+  if (preset === 'lab') {
+    // The lab keeps the tilt you picked; it only pulls in on the room.
+    orbit.radius *= CLOSE_UP.zoom;
+    orbit.target.x = 0;
+    placeCamera(camera, orbit);
+    return;
+  }
   if (preset !== 'control-room') {
     orbit.radius *= 0.88;
     placeCamera(camera, orbit);
@@ -182,6 +193,12 @@ export const floorCorners = (rows: number, preset = 'classic') => {
   const layout = officeLayout(rows, preset);
   const { left, right, back, front } = layout.bounds;
   const corners = [[left, back], [right, back], [left, front], [right, front]].map(([x, z]) => new THREE.Vector3(x, 0, z));
+  if (layout.preset === 'lab') {
+    // The room fills the view, square-on; the deck is a pan away to the right.
+    const { room, backWall } = layout;
+    const inRoom = [[room.left, back], [room.right, back], [room.left, room.front], [room.right, room.front]].map(([x, z]) => new THREE.Vector3(x, 0, z));
+    return [...inRoom, ...[room.left - 0.3, room.right + 0.3].map((x) => new THREE.Vector3(x, backWall.height, back))];
+  }
   if (layout.preset !== 'control-room') return corners;
   const { room, screenWall, crewLounge } = layout;
   return [
@@ -222,7 +239,7 @@ export function fitRadius(camera: THREE.PerspectiveCamera, orbit: Orbit, points:
 /** What the starting view centres on screen: the floor corners, and in Classic the top of the back wall too. */
 const officeOutline = (rows: number, preset: string) => {
   const corners = floorCorners(rows, preset);
-  if (officeLayout(rows, preset).preset === 'control-room') return corners;
+  if (['control-room', 'lab'].includes(officeLayout(rows, preset).preset)) return corners;
   const { left, right, back } = officeLayout(rows, preset).bounds;
   return [...corners, new THREE.Vector3(left, WALL_HEIGHT, back), new THREE.Vector3(right, WALL_HEIGHT, back)];
 };
@@ -239,8 +256,9 @@ function heightOnScreen(camera: THREE.PerspectiveCamera, points: THREE.Vector3[]
  */
 export function frameFloor(camera: THREE.PerspectiveCamera, orbit: Orbit, rows: number, preset = 'classic') {
   camera.fov = fovFor(camera.aspect);
-  orbit.bounds = officeLayout(rows, preset).bounds;
-  const { left, right, back, front } = orbit.bounds;
+  const layout = officeLayout(rows, preset);
+  orbit.bounds = layout.bounds;
+  const { left, right, back, front } = layout.preset === 'lab' ? layout.room : orbit.bounds;
   orbit.target.x = (left + right) / 2;
   orbit.target.z = (back + front) / 2;
   // Never closer than the hand-tuned desktop framing, so walls and furniture above the floor stay in view.

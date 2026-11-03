@@ -169,6 +169,14 @@ a.btn { display: inline-flex; align-items: center; text-decoration: none; box-si
   min-width: 44px; min-height: 44px; display: grid; place-items: center;
 }
 .pet[hidden] { display: none; }
+/* Innovation lab: the camera tilt slider, under the corner buttons. */
+.tilt {
+  position: absolute; right: 16px; top: calc(70px + env(safe-area-inset-top, 0px));
+  display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 12px;
+  background: var(--panel); border: 1px solid var(--line); font: 700 13px var(--body);
+}
+.tilt[hidden] { display: none; }
+.tilt input { width: 110px; accent-color: var(--amber); }
 
 .status {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
@@ -200,3 +208,18 @@ a.btn { display: inline-flex; align-items: center; text-decoration: none; box-si
 .project-filter span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .project-filter b { color: var(--muted); font-variant-numeric: tabular-nums; }
 .left > .usage { flex-shrink: 1; }
+
+/* Innovation lab: warm, light panels to match the room (no purples). */
+body.lab {
+  --bg: #F6EEDF;
+  --panel: rgba(255, 250, 241, 0.95);
+  --ink: #3B2F25;
+  --muted: #8A7A68;
+  --line: rgba(59, 47, 37, 0.14);
+  --chip: #F1E4CE;
+  --amber: #F08A24;
+  --blue: #4F7FD9;
+  color-scheme: light;
+}
+body.lab .btn:hover { background: #E8D7BC; }
+body.lab .chip[aria-pressed="true"], body.lab .zoom[aria-pressed="true"] { background: #E07B54; border-color: #E07B54; color: #FFFFFF; }

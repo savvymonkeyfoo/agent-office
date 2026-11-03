@@ -54,6 +54,9 @@ export class StatusLight {
   }
 }
 
+/** What the deck is built from (the Control room's plan, or the Innovation lab's). */
+type DeckParts = Pick<ControlRoomLayout, 'deck' | 'props' | 'walkways'>;
+
 /** Anyone this close to the entrance is walking in or out through it (nothing else comes near). */
 export const DOOR_REACH = 2.2;
 export const doorsOpen = (door: Point, walkers: Point[]) => walkers.some((p) => Math.hypot(p.x - door.x, p.z - door.z) < DOOR_REACH);
@@ -257,7 +260,7 @@ function addStaircase(group: THREE.Group, layout: ControlRoomLayout, side: numbe
 }
 
 /** A lit sign: `text` on a dark plate (a plain glow where there's no canvas). */
-function sign(text: string, w: number, color: string) {
+export function sign(text: string, w: number, color: string) {
   const drawn = newCanvas(256, 64);
   const material = new THREE.MeshBasicMaterial({ color });
   if (drawn) {
@@ -277,7 +280,7 @@ function sign(text: string, w: number, color: string) {
 }
 
 /** A door frame in a side wall (its posts either side of `width`), facing into the room along +x. */
-function doorFrame(width: number) {
+export function doorFrame(width: number) {
   const frame = new THREE.Group();
   for (const s of [-1, 1]) frame.add(at(box(0.4, 2.7, 0.22, C.frame, { outline: 0.02 }), 0, 1.35, s * (width / 2 + 0.11)));
   frame.add(at(box(0.4, 0.26, width + 0.66, C.frame, { outline: 0.02 }), 0, 2.83, 0));
@@ -365,7 +368,7 @@ function addCrewLounge(group: THREE.Group, layout: ControlRoomLayout) {
 }
 
 /** Warm floorboards, staggered, generated as pixels (no canvas needed); one tile is 2.4 × 1.2 m, four boards across. */
-function plankTexture(repeatX: number, repeatY: number) {
+export function plankTexture(repeatX: number, repeatY: number) {
   const w = 64, h = 32, data = new Uint8Array(w * h * 4);
   const shades = [[0xd9, 0xa8, 0x77], [0xd2, 0x9f, 0x6c], [0xdd, 0xb0, 0x80], [0xcf, 0x9c, 0x6a]];
   for (let y = 0; y < h; y++) {
@@ -395,7 +398,7 @@ const WATER_Y = -0.05;
  * The lake's shore: a winding line from the deck's right edge round the fish's water to its front
  * edge, so the lake runs off the deck's front-right corner and is cut off square on both edges.
  */
-function lakeShore({ deck, props: { pond } }: ControlRoomLayout): Point[] {
+function lakeShore({ deck, props: { pond } }: DeckParts): Point[] {
   const { x, z, rx, rz } = pond;
   const knots: Point[] = [
     { x: deck.x1, z: z - rz - 1.0 }, { x: x + rx - 0.4, z: z - rz - 1.35 }, { x: x + 0.3, z: z - rz - 0.95 },
@@ -406,7 +409,7 @@ function lakeShore({ deck, props: { pond } }: ControlRoomLayout): Point[] {
 }
 
 /** The deck: a block of grass over earth outside the side door, boards by the house, stepping stones, and the lake. */
-function addDeck(group: THREE.Group, layout: ControlRoomLayout) {
+export function addDeck(group: THREE.Group, layout: DeckParts) {
   const { deck: area, props: { pool } } = layout;
   const deck = tag(new THREE.Group(), 'deck');
   const shore = lakeShore(layout);

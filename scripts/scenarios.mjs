@@ -3,7 +3,7 @@
 
 const PROJECTS = ['agent-office', 'hub', 'garden-planner', 'pitch-deck', 'budget-app', 'recipe-bot', 'site-refresh', 'photo-sorter', 'trip-planner', 'music-tagger', 'notes-sync', 'home-lab'];
 const TASKS = ['Edit src/client/lab.ts', 'Bash npm test', 'Read README.md', 'Grep "layout"', 'Write docs/plan.md', 'Bash git push'];
-const STATES = ['working', 'working', 'needs', 'done', 'working', 'finished'];
+const STATES = ['working', 'needs', 'working', 'done', 'working', 'needs', 'finished'];
 
 /** A fake session: `p` picks the project, `i` the session within it. */
 export function record(p, i, state) {
