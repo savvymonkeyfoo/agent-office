@@ -312,7 +312,7 @@ export class OfficeController {
   }
 
   private arrive(key: string, record: AgentRecord, now: number, events: OfficeEvent[]) {
-    const seat = this.freeSeat(now, events);
+    const seat = this.freeSeat(now, events, record.project);
     const agent: Occupant = { record, seat, place: null, arrivesAt: now, nextAt: null, actAt: now + this.between(PLANE_FIRST), reaction: null };
     this.agents.set(key, agent);
     const path = arrivalPath(this.layout, seat);
@@ -688,11 +688,29 @@ export class OfficeController {
     return min + this.clock.random() * (max - min);
   }
 
-  private freeSeat(now: number, events: OfficeEvent[]) {
+  private freeSeat(now: number, events: OfficeEvent[], project?: string) {
     const taken = new Set([...this.agents.values()].map((o) => o.seat.index));
     const free = () => this.layout.seats.find((s) => !taken.has(s.index));
+    if (this.layout.seats[0]?.pod != null && project != null) return this.podSeat(taken, project, now, events);
     if (!free()) this.addRow(now, events);
     return free()!;
+  }
+
+  /**
+   * Innovation lab: a project's sessions sit together in a pod of desks. A newcomer takes a free
+   * desk in a pod its project already has, else a pod nobody's in (the front ones first); when
+   * every pod is taken, a row of pods is added.
+   */
+  private podSeat(taken: Set<number>, project: string, now: number, events: OfficeEvent[]) {
+    const podsOf = (want: string) => new Set([...this.agents.values()].filter((o) => o.record.project === want).map((o) => o.seat.pod));
+    const used = new Set([...this.agents.values()].map((o) => o.seat.pod));
+    const find = () => {
+      const mine = podsOf(project);
+      return this.layout.seats.find((s) => !taken.has(s.index) && mine.has(s.pod))
+        ?? this.layout.seats.find((s) => !used.has(s.pod));
+    };
+    if (!find()) this.addRow(now, events);
+    return find()!;
   }
 
   /**

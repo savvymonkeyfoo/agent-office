@@ -1,7 +1,7 @@
 const KEY = 'agent-office.layout';
 
 /** The presets on offer, by id, with the name the picker shows. */
-const LAYOUTS: [id: string, name: string][] = [['classic', 'Classic'], ['control-room', 'Control room']];
+const LAYOUTS: [id: string, name: string][] = [['classic', 'Classic'], ['control-room', 'Control room'], ['lab', 'Innovation lab']];
 
 type Store = Pick<Storage, 'getItem' | 'setItem'>;
 

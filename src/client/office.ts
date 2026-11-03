@@ -13,13 +13,14 @@ import {
 } from './kitchen.ts';
 import type { AgentRecord } from '../shared/agent.ts';
 import { buildControlRoom, type StatusLight } from './control-room-3d.ts';
+import { buildLab } from './lab-3d.ts';
 
 export { SCREEN_OFF };
 
 export interface Seat extends SeatSpot {
   screen: DeskScreen;
-  /** The console's status light (Control room). */
-  light?: StatusLight;
+  /** The console's status light (Control room), or the keyboard's backlight (Innovation lab). */
+  light?: Pick<StatusLight, 'show' | 'color'>;
   /** The chair, which swivels with its sitter (Control room). */
   swivel?: THREE.Object3D;
 }
@@ -51,6 +52,7 @@ export function updateBackWall(office: { backWall: THREE.Object3D; layout: Offic
 export function buildOffice(rows: number, preset = 'classic') {
   const layout = officeLayout(rows, preset);
   if (layout.preset === 'control-room') return buildControlRoom(layout);
+  if (layout.preset === 'lab') return buildLab(layout);
   const group = new THREE.Group();
   const backWall = addRoom(group, layout);
   addFrontGlass(group);

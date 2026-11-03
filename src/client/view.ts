@@ -4,7 +4,8 @@ import { createSky, createSunClock } from './sky.ts';
 import { bindBackgroundToggle } from './background-toggle.ts';
 import {
   bindHomeKey, blockContextMenu, closeUp, createDoubleTap, createGestures, focusOn, frameFloor, goHome, grabAt, initialOrbit, pansWith, pickSurface,
-  placeCamera, wheelRadius, zoomToward, type Orbit, type Pointer } from './camera.ts';
+  labPhi, placeCamera, wheelRadius, zoomToward, type Orbit, type Pointer } from './camera.ts';
+import { bindTiltSlider } from './lab-tilt.ts';
 import { bindViewToggle, readCloseUp } from './view-toggle.ts';
 import { THEMES, animateTheme, savedTheme } from './themes.ts';
 import { floorAt } from './layout.ts';
@@ -47,6 +48,13 @@ export function createView(host: HTMLElement) {
   }
 
   let office: ReturnType<typeof buildOffice> | undefined;
+  /** The lab's tilt slider: it tilts the view and reframes the room at the new angle. */
+  const tiltHost = document.getElementById('tilt');
+  if (tiltHost) bindTiltSlider(tiltHost, (deg) => {
+    orbit.phi = labPhi(deg);
+    frameFloor(camera, orbit, rows, preset);
+    if (close.on) closeUp(camera, orbit, preset);
+  });
   const close = { on: readCloseUp() };
   const themeId = savedTheme();
   const theme = themeId ? THEMES[themeId] : null;
@@ -58,7 +66,14 @@ export function createView(host: HTMLElement) {
     if (count === rows && layoutPreset === preset) return office!;
     if (office) scene.remove(office.group);
     rows = count;
+    // Into or out of the Innovation lab: its own tilt, square-on (#lab); the other layouts their starting one.
+    if ((layoutPreset === 'lab') !== (preset === 'lab')) {
+      orbit.theta = 0;
+      orbit.phi = layoutPreset === 'lab' ? labPhi() : initialOrbit().phi;
+    }
     preset = layoutPreset;
+    document.body.classList.toggle('lab', preset === 'lab');
+    if (tiltHost) tiltHost.hidden = preset !== 'lab';
     office = buildOffice(count, preset);
     if (theme) { const built = office; office.group.add(theme.decorate(built.layout.bounds, (x, z) => floorAt(built.layout, { x, z }))); }
     scene.add(office.group);

@@ -225,6 +225,7 @@ export function createOfficeScene(host: HTMLElement) {
     }
     const occupants = controller.occupants();
     updateScreens(office.seats, occupants, t);
+    if ('pods' in office) office.pods.update(occupants, dt);
     updateBackWall(office, view.camera.position);
     office.doors?.update(doorsOpen(office.layout.door, [...characters.values(), ...leaving].map((c) => c.root.position)), dt);
     office.board.update(occupants);
