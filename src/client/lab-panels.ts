@@ -7,6 +7,8 @@ import { ToolLog } from './screen-wall.ts';
 import { projectColor, taskLine } from './lab-board.ts';
 import { sessionUrl } from '../cloud/sessions.ts';
 
+/** The waiting list shows this many; the pop-up's Next steps through the rest. */
+const LIST_MAX = 4;
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /** An element with a class and its children (strings become text). */
@@ -60,7 +62,7 @@ export function mountLabPanels(hosts: PanelHosts, select: (key: string) => void)
 
   function list() {
     hosts.list.hidden = !waiting.length;
-    const items = waiting.map((r) => {
+    const items = waiting.slice(0, LIST_MAX).map((r) => {
       const swatch = el('span', 'swatch');
       swatch.style.background = projectColor(r.project);
       const button = el('button', 'needs-item', swatch, el('span', 'who', el('b', '', r.name), el('span', 'muted', r.project)));
@@ -68,6 +70,8 @@ export function mountLabPanels(hosts: PanelHosts, select: (key: string) => void)
       button.onclick = () => select(r.sessionId);
       return el('li', '', button);
     });
+    const more = waiting.length - LIST_MAX;
+    if (more > 0) items.push(el('li', 'muted needs-more', `and ${more} more (use Next below)`));
     hosts.list.replaceChildren(el('div', 'usage-head', el('span', 'label', `Waiting on you · ${waiting.length}`)), el('ul', 'needs-list', ...items));
   }
 

@@ -7,6 +7,8 @@ import { taskLine } from './lab-board.ts';
 
 /** Captions are cut to this many characters (the card has the rest). */
 const CAPTION_CHARS = 32;
+/** More captions than this and only the waiting ones show. */
+const CROWD = 8;
 /** Metres above an agent's feet. */
 const ABOVE = 2.8;
 
@@ -49,7 +51,9 @@ export class LabCaptions {
 
   /** Call every frame: `records` (empty outside the lab) and where each agent's character is. */
   update(records: AgentRecord[], characters: Map<string, { root: THREE.Object3D }>, camera: THREE.Camera, canvas: HTMLCanvasElement) {
-    const wanted = records.filter((r) => (r.state === 'working' || r.state === 'needs') && characters.has(r.sessionId));
+    const live = records.filter((r) => (r.state === 'working' || r.state === 'needs') && characters.has(r.sessionId));
+    // A busy room would be all captions: past CROWD, only the sessions waiting on you keep theirs.
+    const wanted = live.length > CROWD ? live.filter((r) => r.state === 'needs') : live;
     if (!wanted.length && !this.shown.size) return;
     if (!this.layer) {
       this.layer = document.createElement('div');

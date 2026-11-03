@@ -275,3 +275,10 @@ body.lab .card { top: calc(122px + env(safe-area-inset-top, 0px)); }
 .lab-caption[hidden] { display: none; }
 body.lab .btn.primary { background: #E07B54; border-color: #E07B54; }
 body.lab .btn.primary:hover { background: #C9673F; }
+.needs-more { padding: 2px 8px; font-size: 12px; }
+/* The lab's left panels stop short of the activity feed at the bottom left. */
+body.lab .left { max-height: calc(100% - 32px - 230px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); }
+@media (max-width: 760px) { body.lab .left { max-height: calc(100% - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); } }
+/* In the lab only the projects list gives way (it scrolls); the waiting list and plan usage keep their size. */
+body.lab .left > * { flex-shrink: 0; }
+body.lab .left > #projects { flex-shrink: 1; min-height: 80px; }
