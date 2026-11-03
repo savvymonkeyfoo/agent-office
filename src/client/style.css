@@ -265,14 +265,6 @@ body.lab .card { top: calc(122px + env(safe-area-inset-top, 0px)); }
   .lab-feed { display: none !important; }
   .lab-strip { top: calc(124px + env(safe-area-inset-top, 0px)); gap: 10px; font-size: 12px; }
 }
-.lab-captions { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
-.lab-caption {
-  position: absolute; left: 0; top: 0; padding: 3px 8px; border-radius: 8px; white-space: nowrap;
-  background: rgba(255, 250, 241, 0.92); color: #3B2F25; font: 700 11px var(--body);
-  border: 1.5px solid #3FA66B; box-shadow: 0 2px 6px rgba(60, 40, 20, .18);
-}
-.lab-caption.needs { border-color: #F08A24; }
-.lab-caption[hidden] { display: none; }
 body.lab .btn.primary { background: #E07B54; border-color: #E07B54; }
 body.lab .btn.primary:hover { background: #C9673F; }
 .needs-more { padding: 2px 8px; font-size: 12px; }

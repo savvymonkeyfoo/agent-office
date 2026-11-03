@@ -19,7 +19,6 @@ import { bindLayoutPicker, savedLayout } from './layout-picker.ts';
 import { THEMES, bindThemePicker, savedTheme } from './themes.ts';
 import { fetchRun, floorAt, planeLanding, yawTowards, type Point } from './layout.ts';
 import { motionCheck } from './motion-check.ts';
-import { LabCaptions } from './lab-captions.ts';
 
 /** The agent a picked mesh belongs to, if any. */
 export function agentKeyOf(object: THREE.Object3D | null | undefined): string | null {
@@ -79,7 +78,6 @@ export function createOfficeScene(host: HTMLElement) {
   };
 
   /** Innovation lab: what each working or waiting agent is on, in a caption over its head. */
-  const captions = new LabCaptions(host);
   const ring = new THREE.Mesh(
     new THREE.RingGeometry(0.55, 0.68, 40),
     new THREE.MeshBasicMaterial({ color: '#FFB648', transparent: true, opacity: 0.9, depthWrite: false }),
@@ -232,7 +230,6 @@ export function createOfficeScene(host: HTMLElement) {
       if (c.mode === 'gone') { view.scene.remove(c.root); leaving.delete(c); }
     }
     const occupants = controller.occupants();
-    captions.update(preset === 'lab' ? records : [], characters, view.camera, view.canvas);
     updateScreens(office.seats, occupants, t);
     if ('pods' in office) office.pods.update(occupants, dt);
     updateBackWall(office, view.camera.position);
