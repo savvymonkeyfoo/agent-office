@@ -1,9 +1,11 @@
 // The Innovation lab's camera tilt: how far the view looks down at the room, set with a slider
-// and remembered between visits. 90° would be straight down; the lab starts fairly high.
-const KEY = 'agent-office.lab-tilt';
+// and remembered between visits. 90° would be straight down; the lab starts fairly low, looking
+// across the room and up into its timber vault.
+// v2: the vaulted roof (#lab) wants a lower view, so everyone starts again from the new home tilt.
+const KEY = 'agent-office.lab-tilt-v2';
 
 /** Degrees below horizontal: the slider's range and where a first visit starts. */
-export const LAB_TILT = { min: 20, max: 75, home: 42 };
+export const LAB_TILT = { min: 20, max: 75, home: 28 };
 
 type Store = Pick<Storage, 'getItem' | 'setItem'>;
 

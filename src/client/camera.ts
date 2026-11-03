@@ -197,7 +197,7 @@ export const floorCorners = (rows: number, preset = 'classic') => {
     // The room fills the view, square-on; the deck is a pan away to the right.
     const { room, backWall } = layout;
     const inRoom = [[room.left, back], [room.right, back], [room.left, room.front], [room.right, room.front]].map(([x, z]) => new THREE.Vector3(x, 0, z));
-    return [...inRoom, ...[room.left - 0.3, room.right + 0.3].map((x) => new THREE.Vector3(x, backWall.height, back))];
+    return [...inRoom, ...[room.left - 0.3, room.right + 0.3].map((x) => new THREE.Vector3(x, backWall.height, back)), new THREE.Vector3(0, backWall.height + backWall.rise, back)];
   }
   if (layout.preset !== 'control-room') return corners;
   const { room, screenWall, crewLounge } = layout;

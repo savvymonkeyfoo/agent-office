@@ -368,14 +368,15 @@ function addCrewLounge(group: THREE.Group, layout: ControlRoomLayout) {
 }
 
 /** Warm floorboards, staggered, generated as pixels (no canvas needed); one tile is 2.4 × 1.2 m, four boards across. */
-export function plankTexture(repeatX: number, repeatY: number) {
+const PLANKS = [[0xd9, 0xa8, 0x77], [0xd2, 0x9f, 0x6c], [0xdd, 0xb0, 0x80], [0xcf, 0x9c, 0x6a]];
+
+export function plankTexture(repeatX: number, repeatY: number, { shades = PLANKS, seamColor = [0xa8, 0x7a, 0x50] } = {}) {
   const w = 64, h = 32, data = new Uint8Array(w * h * 4);
-  const shades = [[0xd9, 0xa8, 0x77], [0xd2, 0x9f, 0x6c], [0xdd, 0xb0, 0x80], [0xcf, 0x9c, 0x6a]];
   for (let y = 0; y < h; y++) {
     const board = Math.floor(y / 8), seamX = board % 2 ? 16 : 48;
     for (let x = 0; x < w; x++) {
       const seam = y % 8 === 0 || x === seamX;
-      data.set([...(seam ? [0xa8, 0x7a, 0x50] : shades[(board + (x > seamX ? 1 : 0)) % 4]), 255], (y * w + x) * 4);
+      data.set([...(seam ? seamColor : shades[(board + (x > seamX ? 1 : 0)) % 4]), 255], (y * w + x) * 4);
     }
   }
   const texture = new THREE.DataTexture(data, w, h, THREE.RGBAFormat);

@@ -35,8 +35,8 @@ const FIRST_DESK_Z = -3.9;
 const ROW_GAP = 4.7;
 /** Each row's walkway, on the board side of its chairs. */
 const LANE_AHEAD = 2.7;
-/** The maker bench at the break corner's front right: its middle (x), how far back (u), width and depth. */
-export const MAKER = { x: 9.4, u: 5.85, w: 2.2, d: 0.65 };
+/** The maker bench along the break corner's right wall, facing into the room: its middle (x, u), length along the wall and depth. */
+export const MAKER = { x: 10.3, u: 4.3, w: 2.6, d: 0.65 };
 /** An island's round rug reaches under its chairs. */
 export const RUG_R = 2.1;
 /** The side aisles, from the front walkway down to the break corner. */
@@ -50,6 +50,8 @@ const CORNER_DEPTH = 6.2;
 const PROMENADE = 1.0;
 /** The board on the back wall: its middle, width and height (metres). */
 const WALL_HEIGHT = 4.8;
+/** The timber vault rises this far above the walls to its crown. */
+export const VAULT_RISE = 3.4;
 const DECK = { x0: ROOM.right + 0.3, x1: 22.5, z0: ROOM.back, z1: 8.5 };
 /** Deck walkways: one from the side door along the house, two across the deck. */
 const SPINE_X = 12.6;
@@ -118,7 +120,7 @@ export function labLayout(rows: number) {
     lanes,
     kitchen,
     cooler,
-    maker: { ...inLounge(MAKER.x, MAKER.u), w: MAKER.w, d: MAKER.d },
+    maker: { ...inLounge(MAKER.x, MAKER.u), w: MAKER.w, d: MAKER.d, yaw: Math.PI / 2 },
     bookshelf: { ...inLounge(ROOM.left + 0.22, 4.6), length: 1.6 },
     lounge,
     /** The board on the back wall. */
@@ -131,7 +133,7 @@ export function labLayout(rows: number) {
     wallArt: [] as number[],
     props,
     room: { ...ROOM, front: corner.z1 },
-    backWall: { z: ROOM.back, height: WALL_HEIGHT },
+    backWall: { z: ROOM.back, height: WALL_HEIGHT, rise: VAULT_RISE },
     /** Desk footprints, `w` across and `d` deep, turned to `yaw` like their seats. */
     desks: seats.map((s) => ({ ...s.desk, yaw: s.yaw, ...DESK })),
     crewLounge: corner,
@@ -258,7 +260,7 @@ function hangoutsFor({ props, lounge, kitchen, cooler, poolTurns, inLounge, toPr
     // Thrown from the front of the break corner, towards the desks.
     { name: 'planes', chat: false, places: [-7.8, -3.0, 3.0, 7.8].map((x) => standing('planes', inLounge(x, 0.4), 'throwing-plane', Math.PI)) },
     // The maker corner (#lab): watching the 3D printer and the robot arm at work.
-    { name: 'maker', chat: false, places: [standing('maker', inLounge(MAKER.x - 0.4, 5.05), 'watching'), standing('maker', inLounge(MAKER.x + 0.5, 5.05), 'watching')] },
+    { name: 'maker', chat: false, places: [3.9, 5.0].map((u) => standing('maker', inLounge(MAKER.x - 0.95, u), 'watching', yawTowards(inLounge(MAKER.x - 0.95, u), inLounge(MAKER.x, u)))) },
     { name: 'pool-table', chat: false, game: { min: 2 }, places: [poolTurns[0].shoot, poolTurns[1].wait] },
     { name: 'ping-pong', chat: false, game: { min: 2 }, places: [pongEnd(pong.x - PLAYER_X), pongEnd(pong.x + PLAYER_X)] },
     {

@@ -20,6 +20,8 @@ const width = Number(arg('width', '1440')), height = Number(arg('height', '900')
 const extra = arg('query', '');
 /** The lab's camera tilt, in degrees (as the slider saves it). */
 const tilt = arg('tilt', '');
+/** Hold the sky at this local hour (e.g. 11 for daylight); unset follows the clock. */
+const hour = arg('hour', '');
 mkdirSync(out, { recursive: true });
 
 // No config file: the dev proxy to a real server isn't wanted (the feed is fake).
@@ -34,11 +36,12 @@ try {
       page.on('pageerror', (e) => console.error(`[${layout}/${name}] page error:`, e.message));
       await page.addInitScript(([id, deg]) => {
         localStorage.setItem('agent-office.layout', id);
-        if (deg) localStorage.setItem('agent-office.lab-tilt', deg);
+        if (deg) localStorage.setItem('agent-office.lab-tilt-v2', deg);
       }, [layout, tilt]);
       await page.goto(`http://localhost:5199/?${extra}`);
       await page.waitForFunction(() => 'officeFeed' in window && 'officeDebug' in window, null, { timeout: 60000 });
       const steps = scenarios[name];
+      if (hour) await page.evaluate((h) => { (window).__skyHour = Number(h); }, hour);
       if (motion) await page.evaluate(() => (window).__motion?.start());
       const t0 = Date.now();
       for (const step of steps) {
