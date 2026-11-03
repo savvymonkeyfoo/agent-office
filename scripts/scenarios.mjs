@@ -26,10 +26,18 @@ export function room(projects, perProject = 2) {
   return out;
 }
 
+const many = (p, n, state = 'working') => Array.from({ length: n }, (_, i) => record(p, i, i % 4 === 1 ? 'needs' : state));
+
 export const scenarios = {
   one: [{ at: 0, records: room(1, 2) }],
   five: [{ at: 0, records: room(5, 2) }],
   twelve: [{ at: 0, records: room(12, 2) }],
+  // Uneven: one busy project (8 sessions, then 10) next to a small one (2) and a single.
+  uneven: [
+    { at: 0, records: [...many(1, 2), ...many(0, 8)] },
+    { at: 3, records: [...many(1, 2), ...many(0, 8), record(2, 0, 'working')] },
+    { at: 6, records: [...many(1, 2), ...many(0, 10), record(2, 0, 'working')] },
+  ],
   // Sessions come and go: arrivals, a session ending mid-walk, state changes.
   churn: [
     { at: 0, records: room(4, 2) },

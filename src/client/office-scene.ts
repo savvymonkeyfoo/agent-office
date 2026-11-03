@@ -18,6 +18,7 @@ import { TOSS_SECONDS, hitter, rallySeconds, type Rally, type Side } from './pon
 import { bindLayoutPicker, savedLayout } from './layout-picker.ts';
 import { THEMES, bindThemePicker, savedTheme } from './themes.ts';
 import { fetchRun, floorAt, planeLanding, yawTowards, type Point } from './layout.ts';
+import { motionCheck } from './motion-check.ts';
 import { LabCaptions } from './lab-captions.ts';
 
 /** The agent a picked mesh belongs to, if any. */
@@ -198,9 +199,13 @@ export function createOfficeScene(host: HTMLElement) {
     view.canvas.addEventListener('pointerleave', () => handle(null, 0, 0));
   }
 
+  const motion = import.meta.env.DEV ? motionCheck() : null;
+  if (motion) Object.assign(window, { __motion: motion.hook });
+
   view.onFrame((t, dt) => {
     apply(controller.tick());
     characters.forEach((c) => c.update(t, dt));
+    motion?.sample(characters, dt);
     swivelChairs(office.seats, characters.values());
     planes.update(dt);
     poolBalls.update(dt);

@@ -18,6 +18,8 @@ const settle = Number(arg('settle', '6'));
 const motion = process.argv.includes('--motion');
 const width = Number(arg('width', '1440')), height = Number(arg('height', '900'));
 const extra = arg('query', '');
+/** The lab's camera tilt, in degrees (as the slider saves it). */
+const tilt = arg('tilt', '');
 mkdirSync(out, { recursive: true });
 
 // No config file: the dev proxy to a real server isn't wanted (the feed is fake).
@@ -30,7 +32,10 @@ try {
     for (const name of names) {
       const page = await browser.newPage({ viewport: { width, height } });
       page.on('pageerror', (e) => console.error(`[${layout}/${name}] page error:`, e.message));
-      await page.addInitScript((id) => { localStorage.setItem('agent-office.layout', id); localStorage.setItem('agent-office.motion-check', '1'); }, layout);
+      await page.addInitScript(([id, deg]) => {
+        localStorage.setItem('agent-office.layout', id);
+        if (deg) localStorage.setItem('agent-office.lab-tilt', deg);
+      }, [layout, tilt]);
       await page.goto(`http://localhost:5199/?${extra}`);
       await page.waitForFunction(() => 'officeFeed' in window && 'officeDebug' in window, null, { timeout: 60000 });
       const steps = scenarios[name];
@@ -42,7 +47,7 @@ try {
         await page.evaluate((records) => (window).officeFeed(records), step.records);
       }
       await page.waitForTimeout(settle * 1000);
-      await page.screenshot({ path: `${out}/${layout}-${name}.png` });
+      await page.screenshot({ path: `${out}/${layout}-${name}${tilt ? `-tilt${tilt}` : ''}.png` });
       if (motion) report[`${layout}/${name}`] = await page.evaluate(() => (window).__motion?.stop() ?? null);
       await page.close();
       console.log(`${layout}/${name} done`);

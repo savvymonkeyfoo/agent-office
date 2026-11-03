@@ -279,9 +279,13 @@ class PodRug {
     this.root.userData.labelLift = this.label;
   }
 
-  /** Shows the rug for `project` (null: no project here), with how many of its sessions are waiting on you. */
-  show(project: string | null, waiting: number) {
+  /**
+   * Shows the rug for `project` (null: no project here), with how many of its sessions are waiting on you.
+   * `labelled` false: a busy project's next pod along, whose rug runs on from this one's under one name tag.
+   */
+  show(project: string | null, waiting: number, labelled = true) {
     this.target = project ? 1 : 0;
+    this.label.visible = labelled;
     if (!project) return;
     const key = `${project}|${waiting}`;
     if (key === this.key) return;
@@ -357,10 +361,18 @@ function addPods(group: THREE.Group, layout: LabLayout) {
       s.root.visible = s.shown > 0;
       s.root.scale.setScalar(Math.max(0.001, ease(s.shown)));
     });
+    const projects = layout.pods.map((pod) => pod.seats.map((k) => occupants.get(k)).filter((r): r is AgentRecord => !!r));
+    const projectOf = (i: number) => projects[i]?.[0]?.project ?? null;
     layout.pods.forEach((pod, i) => {
-      const here = pod.seats.map((k) => occupants.get(k)).filter((r): r is AgentRecord => !!r);
+      const project = projectOf(i);
+      // Side-by-side pods of one project read as one long rug: the first carries the name and every pod's waiting count.
+      const runsOn = i > 0 && layout.pods[i - 1].row === pod.row && project != null && projectOf(i - 1) === project;
+      let waiting = 0;
+      for (let k = i; k < layout.pods.length && layout.pods[k].row === pod.row && projectOf(k) === project; k++) {
+        waiting += projects[k].filter((r) => r.state === 'needs').length;
+      }
       const rug = rugs[i];
-      rug.show(here[0]?.project ?? null, here.filter((r) => r.state === 'needs').length);
+      rug.show(project, waiting, !runsOn);
       rug.shown = THREE.MathUtils.clamp(rug.shown + Math.sign(rug.target - rug.shown) * (dt / POP_SECONDS), 0, 1);
       rug.root.visible = rug.shown > 0;
       rug.root.scale.set(Math.max(0.001, ease(rug.shown)), 1, Math.max(0.001, ease(rug.shown)));
