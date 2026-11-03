@@ -5,7 +5,7 @@ import { heightAt, type ControlRoomLayout } from '../src/client/control-room.ts'
 
 /** Things on the floor you can walk over or on (the angler walks out along the jetty), and zone groups (their pieces are checked one by one). */
 const WALKABLE = new Set(['floor', 'rug', 'door', 'glass-door', 'jetty']);
-const ZONES = new Set(['desk-row', 'meeting-room', 'lounge', 'kitchen', 'deck', 'glass-front']);
+const ZONES = new Set(['desk-row', 'pod', 'deck-props', 'meeting-room', 'lounge', 'kitchen', 'deck', 'glass-front']);
 const CLEARANCE = 0.1;
 /** Anything whose underside is higher than this is over everyone's head. */
 const HEADROOM = 2.0;

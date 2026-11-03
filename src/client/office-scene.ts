@@ -18,6 +18,7 @@ import { TOSS_SECONDS, hitter, rallySeconds, type Rally, type Side } from './pon
 import { bindLayoutPicker, savedLayout } from './layout-picker.ts';
 import { THEMES, bindThemePicker, savedTheme } from './themes.ts';
 import { fetchRun, floorAt, planeLanding, yawTowards, type Point } from './layout.ts';
+import { LabCaptions } from './lab-captions.ts';
 
 /** The agent a picked mesh belongs to, if any. */
 export function agentKeyOf(object: THREE.Object3D | null | undefined): string | null {
@@ -66,7 +67,7 @@ export function createOfficeScene(host: HTMLElement) {
   /** A new character, standing on the floor. */
   const newCharacter = (key: string, coordinator = false) => {
     const look = lookFor(key, coordinator);
-    const character = new Character(theme ? theme.costume(look, lookNumber(key)) : look, { trickOrTreat: !!theme?.trickOrTreat });
+    const character = new Character(theme ? theme.costume(look, lookNumber(key)) : look, { trickOrTreat: !!theme?.trickOrTreat, bot: preset === 'lab' });
     character.ground = floor;
     return character;
   };
@@ -76,6 +77,8 @@ export function createOfficeScene(host: HTMLElement) {
     character.throwPlane((from) => planes.throw(from, at, onFloor), landingPoint(at, onFloor));
   };
 
+  /** Innovation lab: what each working or waiting agent is on, in a caption over its head. */
+  const captions = new LabCaptions(host);
   const ring = new THREE.Mesh(
     new THREE.RingGeometry(0.55, 0.68, 40),
     new THREE.MeshBasicMaterial({ color: '#FFB648', transparent: true, opacity: 0.9, depthWrite: false }),
@@ -224,6 +227,7 @@ export function createOfficeScene(host: HTMLElement) {
       if (c.mode === 'gone') { view.scene.remove(c.root); leaving.delete(c); }
     }
     const occupants = controller.occupants();
+    captions.update(preset === 'lab' ? records : [], characters, view.camera, view.canvas);
     updateScreens(office.seats, occupants, t);
     if ('pods' in office) office.pods.update(occupants, dt);
     updateBackWall(office, view.camera.position);

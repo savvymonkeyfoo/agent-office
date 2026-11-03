@@ -7,6 +7,7 @@ import { hasWebGL } from './webgl.ts';
 import { sessionUrl } from '../cloud/sessions.ts';
 import { startClock } from './clock.ts';
 import { bindPetButton } from './pet-button.ts';
+import { mountLabPanels } from './lab-panels.ts';
 import type { AgentRecord, FeedPayload } from '../shared/agent.ts';
 
 export { hasWebGL };
@@ -72,6 +73,12 @@ export function boot({ createOffice }: BootOptions = {}) {
   office.onPick(select);
   office.onHover((key, x, y) => showTooltip(tooltip, key ? records.get(key) : undefined, x, y));
 
+  // The Innovation lab's panels (they only show in the lab, but keep up with the feed either way).
+  const labHosts = ['lab-strip', 'lab-needs', 'lab-popup', 'lab-feed'].map((id) => document.getElementById(id));
+  const labPanels = labHosts.every((h) => h)
+    ? mountLabPanels({ strip: labHosts[0]!, list: labHosts[1]!, popup: labHosts[2]!, feed: labHosts[3]! }, (key) => select(key))
+    : null;
+
   const projects = mountProjectFilter(document.getElementById('projects')!, () => last && applyFeed(last), import.meta.env.VITEST ? undefined : serverHiddenSync);
   let last: FeedPayload | null = null;
 
@@ -81,6 +88,8 @@ export function boot({ createOffice }: BootOptions = {}) {
     const shown = projects.filter(payload);
     records = new Map(shown.map((r) => [r.sessionId, r]));
     office.show(shown);
+    // Only the lab shows these panels; elsewhere they stay empty (#52: no counts outside the lab).
+    labPanels?.update(document.body.classList.contains('lab') ? shown : []);
     showStatus(null);
     if (selected) select(selected);
   }
