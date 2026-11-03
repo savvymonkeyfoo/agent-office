@@ -4,7 +4,7 @@
 // desks, and the Control room's deck outside the side door. A desk only shows while a session
 // sits at it; a pod's rug only while a project has a desk there.
 import * as THREE from 'three';
-import { at, box, cyl, part, tag, toonRamp } from './toon.ts';
+import { at, ball, box, cyl, part, tag, toonRamp } from './toon.ts';
 import type { Point } from './layout.ts';
 import type { LabLayout } from './lab.ts';
 import type { AgentRecord, OfficeState } from '../shared/agent.ts';
@@ -353,6 +353,17 @@ function addPods(group: THREE.Group, layout: LabLayout) {
     return { ...spot, screen, light, swivel: chair };
   });
 
+  // A low oak planter fills the gap between neighbouring pods in a row, there while either pod has a desk out.
+  const planters = layout.pods.slice(1).flatMap((pod, k) => {
+    const left = layout.pods[k];
+    if (left.row !== pod.row) return [];
+    const root = buildPlanter(k);
+    root.position.set((left.x + pod.x) / 2, 0, pod.z);
+    root.visible = false;
+    group.add(root);
+    return [{ root, pods: [left.index, pod.index], shown: 0 }];
+  });
+
   /** Call every frame with each desk's agent: desks pop in and pack away, rugs follow their pods' projects. */
   function update(occupants: Map<number, AgentRecord>, dt: number) {
     stations.forEach((s, i) => {
@@ -362,6 +373,12 @@ function addPods(group: THREE.Group, layout: LabLayout) {
       s.root.scale.setScalar(Math.max(0.001, ease(s.shown)));
     });
     const projects = layout.pods.map((pod) => pod.seats.map((k) => occupants.get(k)).filter((r): r is AgentRecord => !!r));
+    for (const p of planters) {
+      const target = p.pods.some((i) => projects[i].length) ? 1 : 0;
+      p.shown = THREE.MathUtils.clamp(p.shown + Math.sign(target - p.shown) * (dt / POP_SECONDS), 0, 1);
+      p.root.visible = p.shown > 0;
+      p.root.scale.setScalar(Math.max(0.001, ease(p.shown)));
+    }
     const projectOf = (i: number) => projects[i]?.[0]?.project ?? null;
     layout.pods.forEach((pod, i) => {
       const project = projectOf(i);
@@ -380,6 +397,17 @@ function addPods(group: THREE.Group, layout: LabLayout) {
   }
 
   return { seats, pods: { update, rugs, stations } };
+}
+
+/** The planter between two pods: an oak trough of rounded shrubs and a few taller leaves, about desk height. */
+export function buildPlanter(i: number) {
+  const planter = tag(new THREE.Group(), 'planter');
+  planter.add(at(box(1.1, 0.5, 0.5, '#C98F55'), 0, 0.25, 0));
+  planter.add(at(box(1.16, 0.06, 0.56, '#A8723F', { outline: 0.02 }), 0, 0.52, 0));
+  const greens = ['#5FA35A', '#6FB865', '#4E9150'];
+  const shrubs: [number, number, number, number][] = [[-0.36, 0.7, 0.02, 0.24], [0.02, 0.76, -0.04, 0.28], [0.38, 0.69, 0.04, 0.23], [-0.16, 0.92, 0.0, 0.17], [0.22, 0.95, -0.02, 0.16]];
+  shrubs.forEach(([x, y, z, r], k) => planter.add(at(ball(r, greens[(k + i) % greens.length]), x, y, z)));
+  return planter;
 }
 
 /** Where a pod's rug is, for tests and checks. */
