@@ -134,6 +134,7 @@ export function startPet(root: HTMLElement, { kind, officeUrl, createScene = cre
   /** The pointer is over the pet: say what's going on. The desktop app calls this itself, since its window takes the mouse. */
   function hover(on: boolean) {
     hovering = on;
+    root.toggleAttribute('data-hover', on);
     render();
   }
   root.addEventListener('mouseenter', () => hover(true));
@@ -159,7 +160,8 @@ function defaultOpen(url: string) {
 
 if (!import.meta.env.VITEST) {
   const params = new URLSearchParams(location.search);
-  const kind: PetKind = params.get('character') === 'dog' ? 'dog' : 'worker';
+  const asked = params.get('character');
+  const kind: PetKind = asked === 'dog' || asked === 'bot' ? asked : 'worker';
   const root = document.getElementById('pet')!;
   if (!hasWebGL()) {
     root.textContent = "3D isn't available here, so the pet can't be drawn.";
@@ -171,7 +173,7 @@ if (!import.meta.env.VITEST) {
     });
     // In a plain browser the page handles its own clicks; in the desktop app the window does (it also drags).
     if (!native) root.addEventListener('click', () => pet.click());
-    Object.assign(window, { pet: { click: pet.click, hover: pet.hover, applyFeed: pet.applyFeed } });
+    Object.assign(window, { pet: { click: pet.click, hover: pet.hover, applyFeed: pet.applyFeed, say: pet.say } });
     const events = new EventSource('/api/events');
     events.onmessage = (e) => pet.applyFeed(JSON.parse(e.data));
     // EventSource retries on its own; until it's back, the pet dozes.

@@ -26,7 +26,7 @@ private enum PetSize: String, CaseIterable {
   var title: String { rawValue.prefix(1).uppercased() + rawValue.dropFirst() }
 }
 
-private let characters = [("worker", "Office worker"), ("dog", "Office dog")]
+private let characters = [("worker", "Office worker"), ("bot", "Innovation lab bot"), ("dog", "Office dog")]
 
 @main
 struct AgentPetMain {

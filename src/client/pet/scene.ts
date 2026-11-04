@@ -8,12 +8,14 @@ import type { BubbleKind } from '../poses.ts';
 import type { OfficeState } from '../../shared/agent.ts';
 import type { Mood } from './mood.ts';
 
-export type PetKind = 'worker' | 'dog';
+/** The classic office worker, the Innovation lab's screen-face bot, or the office dog. */
+export type PetKind = 'worker' | 'bot' | 'dog';
 
 /** The office state the worker acts out for each mood: typing, waving, sipping a coffee, or slumped asleep. */
 const WORKER_STATE: Record<Mood, OfficeState> = { working: 'working', needs: 'needs', idle: 'done', offline: 'stale' };
 const DOG_BUBBLE: Record<Mood, BubbleKind | null> = { working: 'working', needs: 'needs', idle: null, offline: 'stale' };
 const WORKER_LOOK = { shirt: '#4D86FF', hat: 'headphones' as const, hatColor: '#3A3150', skin: '#F6CFA8' };
+const BOT_LOOK = { shirt: '#E07B54', hat: 'headphones' as const, hatColor: '#3A3150', skin: '#F6CFA8' };
 const DOG_SCALE = 2.3;
 /** A small screen-space margin around the character, in CSS pixels, so the edges are easy to grab. */
 const HIT_MARGIN = 6;
@@ -55,8 +57,8 @@ export function createPetScene(host: HTMLElement, kind: PetKind): PetScene {
   let dog: Dog | null = null;
   let dogBubble: THREE.Sprite | null = null;
 
-  if (kind === 'worker') {
-    worker = new Character(WORKER_LOOK);
+  if (kind !== 'dog') {
+    worker = kind === 'bot' ? new Character(BOT_LOOK, { bot: true }) : new Character(WORKER_LOOK);
     const seat = { index: 0, row: 0, desk: { x: 0, z: 0.74 }, chair: { x: 0, z: 0 }, yaw: 0, sit: { x: 0, z: 0 }, approach: { x: 0, z: -0.5 }, standSpot: { x: 0, z: -0.5 }, link: [] };
     worker.sitAt(seat, WORKER_STATE[mood]);
     const desk = littleDesk();
@@ -64,7 +66,7 @@ export function createPetScene(host: HTMLElement, kind: PetKind): PetScene {
     actor.add(chair(), worker.root, desk.root);
     // The desk sits between the worker and you: the camera looks over it from the front.
     camera.position.set(2.4, 3.6, 8.2);
-    camera.lookAt(0, 1.6, 0.35);
+    camera.lookAt(0, 1.75, 0.35); // a little low in the window, leaving room for the bubble over its head
   } else {
     dog = new Dog();
     dog.root.scale.setScalar(DOG_SCALE);
@@ -76,7 +78,7 @@ export function createPetScene(host: HTMLElement, kind: PetKind): PetScene {
     dogBubble.renderOrder = 10;
     actor.add(dog.root, dogBubble);
     camera.position.set(1.3, 2.4, 6.3);
-    camera.lookAt(0, 1.05, 0);
+    camera.lookAt(0, 1.2, 0);
   }
 
   function resize() {

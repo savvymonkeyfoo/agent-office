@@ -8,7 +8,7 @@ const { join } = require('node:path');
 /** Where the office runs: AGENT_OFFICE_URL, else 127.0.0.1 on PORT (default 4321), like the office itself. */
 const OFFICE_URL = process.env.AGENT_OFFICE_URL || `http://127.0.0.1:${Number(process.env.PORT) || 4321}/`;
 const SIZES = { small: [160, 192], medium: [200, 240], large: [260, 312] };
-const CHARACTERS = [['worker', 'Office worker'], ['dog', 'Office dog']];
+const CHARACTERS = [['worker', 'Office worker'], ['bot', 'Innovation lab bot'], ['dog', 'Office dog']];
 
 let settingsFile;
 let settings = { character: 'worker', size: 'medium' };
