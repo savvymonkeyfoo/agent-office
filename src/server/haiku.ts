@@ -1,7 +1,9 @@
 // One place the office asks Claude Haiku for a few sentences: the briefing, the pet's lines, the stuck check and the ask box.
 // It pays with an Anthropic API key kept only for the office (your API credit), else falls back to the
-// `claude` CLI on your claude.ai login. It never reads ANTHROPIC_API_KEY or ANTHROPIC_BASE_URL: on a work
-// laptop those point at the employer's gateway (e.g. Foundry), which must never pay for this.
+// `claude` CLI on your claude.ai login. It never reads ANTHROPIC_API_KEY or ANTHROPIC_BASE_URL itself: on a work
+// laptop those point at the employer's gateway (e.g. Foundry). Only if you opt in on that computer
+// (`echo work > ~/.agent-office/haiku-provider`, or AGENT_OFFICE_HAIKU=work) does it run `claude` with your
+// work setup as it is, so the gateway pays.
 import { execFile } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
@@ -12,12 +14,14 @@ import { usesWorkProvider } from './cloud.ts';
 export const MODEL = 'claude-haiku-5-5';
 /** Where the office's own key can live, if not in AGENT_OFFICE_ANTHROPIC_KEY. */
 export const keyFile = () => join(homedir(), '.agent-office', 'anthropic-key');
+/** Holds `work` on a computer where Claude Code's own work setup (key or gateway) may pay for the office's calls. */
+export const providerFile = () => join(homedir(), '.agent-office', 'haiku-provider');
 /** A ceiling on calls per day, so a bug can't drain the credit (Haiku costs about $0.001 a call here). */
 const DAILY_CALLS = Number(process.env.AGENT_OFFICE_HAIKU_DAILY) || 400;
 
 const WORK_KEYS = ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_USE_FOUNDRY', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX'];
 
-export type HaikuRoute = 'api' | 'login' | null;
+export type HaikuRoute = 'api' | 'login' | 'work' | null;
 
 export interface HaikuRequest {
   system: string;
@@ -27,7 +31,7 @@ export interface HaikuRequest {
 }
 
 export interface Haiku {
-  /** How calls are paid for: the office's API key, your claude.ai login through the CLI, or not at all. */
+  /** How calls are paid for: the office's API key, your claude.ai login or your work setup through the CLI, or not at all. */
   route(): HaikuRoute;
   /** The reply text, or null when Haiku is off, over the daily cap, or the call failed. */
   ask(request: HaikuRequest): Promise<string | null>;
@@ -39,22 +43,31 @@ export function officeKey(env: NodeJS.ProcessEnv = process.env, read: (file: str
   try { return read(keyFile()).trim() || null; } catch { return null; }
 }
 
+/** Opted in to paying through Claude Code's work setup on this computer. */
+export function wantsWork(env: NodeJS.ProcessEnv = process.env, read: (file: string) => string = (f) => readFileSync(f, 'utf8')) {
+  if (env.AGENT_OFFICE_HAIKU) return env.AGENT_OFFICE_HAIKU === 'work';
+  try { return read(providerFile()).trim().toLowerCase() === 'work'; } catch { return false; }
+}
+
 const readSettings = () => { try { return JSON.parse(readFileSync(join(claudeConfigDir(), 'settings.json'), 'utf8')); } catch { return null; } };
 
 interface HaikuOptions {
   env?: NodeJS.ProcessEnv;
   /** Tests swap the API and CLI calls. */
   callApi?: (key: string, request: HaikuRequest) => Promise<string | null>;
-  callCli?: (request: HaikuRequest, env: NodeJS.ProcessEnv) => Promise<string | null>;
+  callCli?: (request: HaikuRequest, env: NodeJS.ProcessEnv, work?: boolean) => Promise<string | null>;
   workSettings?: () => boolean;
+  optedInToWork?: () => boolean;
   now?: () => number;
 }
 
-export function createHaiku({ env = process.env, callApi = apiCall, callCli = cliCall, workSettings = () => usesWorkProvider(readSettings()), now = Date.now }: HaikuOptions = {}): Haiku {
+export function createHaiku({ env = process.env, callApi = apiCall, callCli = cliCall, workSettings = () => usesWorkProvider(readSettings()), optedInToWork = () => wantsWork(env), now = Date.now }: HaikuOptions = {}): Haiku {
   let day = '';
   let calls = 0;
   const route = (): HaikuRoute => {
     if (env.AGENT_OFFICE_HAIKU === '0') return null;
+    // Asked for on this computer: the CLI with your work key or gateway left in place.
+    if (optedInToWork()) return 'work';
     if (officeKey(env)) return 'api';
     // The CLI fallback only runs on a plain claude.ai login: never through a work key or gateway.
     return env.AGENT_OFFICE_HAIKU === 'api' || workSettings() ? null : 'login';
@@ -68,7 +81,7 @@ export function createHaiku({ env = process.env, callApi = apiCall, callCli = cl
       if (today !== day) { day = today; calls = 0; }
       if (++calls > DAILY_CALLS) return null;
       try {
-        const text = via === 'api' ? await callApi(officeKey(env)!, request) : await callCli(request, env);
+        const text = via === 'api' ? await callApi(officeKey(env)!, request) : await callCli(request, env, via === 'work');
         return text?.trim() || null;
       } catch (error) {
         console.error(`Haiku call failed: ${error instanceof Error ? error.message.split('\n')[0] : String(error)}`);
@@ -102,9 +115,10 @@ async function apiCall(key: string, { system, prompt, maxTokens = 2000 }: HaikuR
   return (body.content ?? []).flatMap((block) => (block.type === 'text' && block.text ? [block.text] : [])).join('\n');
 }
 
-function cliCall({ system, prompt }: HaikuRequest, env: NodeJS.ProcessEnv) {
+/** `claude -p` on the smallest model. Work keys are stripped, unless you opted in to them paying (`work`). */
+function cliCall({ system, prompt }: HaikuRequest, env: NodeJS.ProcessEnv, work = false) {
   const childEnv = { ...env };
-  for (const key of WORK_KEYS) delete childEnv[key];
+  if (!work) for (const key of WORK_KEYS) delete childEnv[key];
   return new Promise<string | null>((resolve) => {
     const child = execFile(env.CLAUDE_BIN || 'claude', ['-p', '--model', 'haiku'],
       // On Windows an npm-installed claude is a .cmd script, which only runs through the shell.

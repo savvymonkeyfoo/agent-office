@@ -4,7 +4,7 @@ const SEEN_KEY = 'agentOffice.lastSeen';
 /** While the page is open and visible, it counts as seen up to now. */
 const SEEN_EVERY_MS = 60_000;
 
-interface AssistantState { route: 'api' | 'login' | null; petVoice: boolean }
+interface AssistantState { route: 'api' | 'login' | 'work' | null; petVoice: boolean }
 
 interface Options {
   request?: typeof fetch;
