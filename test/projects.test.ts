@@ -46,7 +46,7 @@ describe('Capgemini and personal tabs', () => {
   const listed = (el: HTMLElement) => [...el.querySelectorAll<HTMLInputElement>('input[data-project]')].map((b) => b.dataset.project);
   const click = (el: HTMLElement, selector: string) => el.querySelector<HTMLButtonElement>(selector)!.click();
 
-  it('shows everything on All, and narrows the list and office once a project is marked Capgemini', () => {
+  it('counts unmarked projects as Capgemini, and narrows the list and office once one is marked personal', () => {
     localStorage.clear();
     const el = document.createElement('aside');
     let changes = 0;
@@ -54,20 +54,21 @@ describe('Capgemini and personal tabs', () => {
     expect(filter.filter(records)).toHaveLength(3);
     expect(el.querySelector('[data-tab="all"]')!.getAttribute('aria-pressed')).toBe('true');
 
-    // Nothing is work yet: Capgemini is empty, Personal has everything.
-    click(el, '[data-tab="work"]');
-    expect(filter.filter(records)).toHaveLength(0);
-    expect(el.textContent).toContain('No Capgemini projects yet');
+    // Nothing is marked yet: everything is Capgemini.
     click(el, '[data-tab="personal"]');
-    expect(filter.filter(records)).toHaveLength(3);
-
-    click(el, '[data-kind="AIE reporting"]');
-    expect(listed(el)).toEqual(['Agent Office']);
-    expect(filter.filter(records).map((r) => r.sessionId)).toEqual(['a']);
+    expect(filter.filter(records)).toHaveLength(0);
+    expect(el.textContent).toContain('No personal projects yet');
     click(el, '[data-tab="work"]');
+    expect(filter.filter(records)).toHaveLength(3);
+    expect(el.querySelector('[data-kind="AIE reporting"]')!.textContent).toBe('💼');
+
+    click(el, '[data-kind="Agent Office"]');
     expect(listed(el)).toEqual(['AIE reporting']);
     expect(filter.filter(records).map((r) => r.sessionId)).toEqual(['b', 'c']);
-    expect(el.querySelector('[data-kind="AIE reporting"]')!.textContent).toBe('💼');
+    click(el, '[data-tab="personal"]');
+    expect(listed(el)).toEqual(['Agent Office']);
+    expect(filter.filter(records).map((r) => r.sessionId)).toEqual(['a']);
+    expect(el.querySelector('[data-kind="Agent Office"]')!.textContent).toBe('🏠');
     expect(changes).toBe(4);
   });
 
@@ -76,27 +77,39 @@ describe('Capgemini and personal tabs', () => {
     const first = document.createElement('aside');
     const one = mountProjectFilter(first, () => {});
     one.filter(records);
-    click(first, '[data-kind="AIE reporting"]');
-    click(first, '[data-tab="work"]');
+    click(first, '[data-kind="Agent Office"]');
+    click(first, '[data-tab="personal"]');
 
     const again = document.createElement('aside');
     const two = mountProjectFilter(again, () => {});
-    expect(two.filter(records).map((r) => r.sessionId)).toEqual(['b', 'c']);
-    expect(again.querySelector('[data-tab="work"]')!.getAttribute('aria-pressed')).toBe('true');
+    expect(two.filter(records).map((r) => r.sessionId)).toEqual(['a']);
+    expect(again.querySelector('[data-tab="personal"]')!.getAttribute('aria-pressed')).toBe('true');
   });
 
-  it('keeps the marks on the server when it has them', async () => {
+  it("takes the server's marks and saves one project at a time", async () => {
     localStorage.clear();
-    const saves: string[][] = [];
+    const saves: [string, string][] = [];
     const el = document.createElement('aside');
     let changes = 0;
-    const filter = mountProjectFilter(el, () => { changes += 1; }, undefined, { load: async () => ['Agent Office'], save: (l) => { saves.push(l); } });
+    const filter = mountProjectFilter(el, () => { changes += 1; }, undefined, {
+      load: async () => ({ 'Agent Office': 'personal' }),
+      save: (project, kind) => { saves.push([project, kind]); },
+    });
     filter.filter(records);
     await new Promise((r) => setTimeout(r));
     expect(changes).toBe(1);
     click(el, '[data-kind="AIE reporting"]');
-    expect(saves.at(-1)).toEqual(['Agent Office', 'AIE reporting']);
-    click(el, '[data-tab="work"]');
+    expect(saves).toEqual([['AIE reporting', 'personal']]);
+    click(el, '[data-tab="personal"]');
     expect(filter.filter(records).map((r) => r.sessionId)).toEqual(['a', 'b', 'c']);
+  });
+
+  it("gives an empty server this browser's marks", async () => {
+    localStorage.clear();
+    localStorage.setItem('agent-office:project-kinds', JSON.stringify({ Trading: 'personal' }));
+    const saves: [string, string][] = [];
+    mountProjectFilter(document.createElement('aside'), () => {}, undefined, { load: async () => ({}), save: (p, k) => { saves.push([p, k]); } });
+    await new Promise((r) => setTimeout(r));
+    expect(saves).toEqual([['Trading', 'personal']]);
   });
 });

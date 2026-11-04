@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { ApiHandler } from './http.ts';
 import type { Feed } from './feed.ts';
 import type { AckStore } from './acknowledged.ts';
-import { projectList, type HiddenProjectsStore } from './hidden-projects.ts';
+import { projectList, projectMark, type HiddenProjectsStore, type ProjectKindsStore } from './hidden-projects.ts';
 import type { PetLauncher } from './pet.ts';
 import { isThisMachine } from './tracking.ts';
 import type { Insights } from './insights.ts';
@@ -29,7 +29,7 @@ const MAX_BODY = 4096;
 const MAX_PROJECTS_BODY = 64 * 1024;
 const MAX_ID = 200;
 
-export function createApi(feed: Feed, acknowledged?: AckStore, usage?: UsageApi, hiddenProjects?: HiddenProjectsStore, pet?: PetLauncher, assistant?: AssistantApi, workProjects?: HiddenProjectsStore): ApiHandler {
+export function createApi(feed: Feed, acknowledged?: AckStore, usage?: UsageApi, hiddenProjects?: HiddenProjectsStore, pet?: PetLauncher, assistant?: AssistantApi, projectKinds?: ProjectKindsStore): ApiHandler {
   return async (req, res) => {
     const path = new URL(req.url ?? '/', 'http://local').pathname;
 
@@ -80,13 +80,10 @@ export function createApi(feed: Feed, acknowledged?: AckStore, usage?: UsageApi,
       return true;
     }
 
-    // Two lists of project names: unticked ones, and ones marked as Capgemini work.
-    const lists: Record<string, HiddenProjectsStore | undefined> = { '/api/hidden-projects': hiddenProjects, '/api/work-projects': workProjects };
-    const store = lists[path];
-    if (store) {
+    if (path === '/api/hidden-projects' && hiddenProjects) {
       if (req.method === 'GET') {
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-        res.end(JSON.stringify(store.get()));
+        res.end(JSON.stringify(hiddenProjects.get()));
         return true;
       }
       if (req.method === 'PUT') {
@@ -99,7 +96,29 @@ export function createApi(feed: Feed, acknowledged?: AckStore, usage?: UsageApi,
           return reply(res, 400, 'Body must be a JSON list of project names.');
         }
         if (!list) return reply(res, 400, 'Body must be a JSON list of project names.');
-        store.set(list);
+        hiddenProjects.set(list);
+        res.writeHead(204).end();
+        return true;
+      }
+    }
+
+    // Capgemini (work) or personal, one project at a time.
+    if (path === '/api/project-kinds' && projectKinds) {
+      if (req.method === 'GET') {
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+        res.end(JSON.stringify(projectKinds.get()));
+        return true;
+      }
+      if (req.method === 'PUT') {
+        if (!req.headers['content-type']?.startsWith('application/json')) return reply(res, 415, 'Send JSON.');
+        let mark: ReturnType<typeof projectMark>;
+        try {
+          mark = projectMark(JSON.parse(await readBody(req)));
+        } catch {
+          mark = null;
+        }
+        if (!mark) return reply(res, 400, 'Body must be JSON: { "project": "…", "kind": "work" | "personal" }.');
+        projectKinds.set(mark.project, mark.kind);
         res.writeHead(204).end();
         return true;
       }
