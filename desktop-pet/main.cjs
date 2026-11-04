@@ -101,6 +101,8 @@ function track() {
 }
 
 const run = (script) => win.webContents.executeJavaScript(script).catch(() => {});
+/** Whether the office reads the pet's lines out loud, as the page last reported (null: no voice to mute). */
+let voice = null;
 
 ipcMain.on('pet', (event, message) => {
   if (event.sender !== win.webContents || !message || typeof message.type !== 'string') return;
@@ -115,6 +117,8 @@ ipcMain.on('pet', (event, message) => {
     if (moved) { settings.position = { x: win.getBounds().x, y: win.getBounds().y }; save(); }
     else if (offline) load();
     else run('window.pet && window.pet.click()');
+  } else if (message.type === 'voice') {
+    voice = message.available ? { on: message.on !== false } : null;
   } else if (message.type === 'menu') {
     menu().popup({ window: win });
   }
@@ -138,6 +142,7 @@ function menu() {
         click: () => resize(key),
       })),
     },
+    ...(voice ? [{ label: 'Mute voice', type: 'checkbox', checked: !voice.on, click: () => run(`window.pet && window.pet.setVoice && window.pet.setVoice(${!voice.on})`) }] : []),
     { label: 'Open Agent Office', click: () => openExternal(OFFICE_URL) },
     { label: 'Reload', click: load },
     { type: 'separator' },

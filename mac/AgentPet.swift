@@ -84,6 +84,8 @@ final class Pet: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKNavi
   private var overlay: Overlay!
   /** The parts of the window the page says are the pet, top-left origin; empty means all of it. */
   private var hitRects: [NSRect] = []
+  /** Whether the office reads the pet's lines out loud, as the page last reported (nil: no voice to mute). */
+  private var voiceOn: Bool?
   private var pointerOver = false
   private var retry: Timer?
   /** Set when the office answered without a pet page (an old build), to say so instead of "not running". */
@@ -168,6 +170,8 @@ final class Pet: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKNavi
       load()
     } else if type == "open", let text = body["url"] as? String, let url = URL(string: text), ["http", "https"].contains(url.scheme ?? "") {
       NSWorkspace.shared.open(url)
+    } else if type == "voice" {
+      voiceOn = (body["available"] as? Bool) == true ? (body["on"] as? Bool) ?? true : nil
     } else if type == "hit", let rects = body["rects"] as? [[String: Any]] {
       hitRects = rects.compactMap { r in
         guard let x = r["x"] as? NSNumber, let y = r["y"] as? NSNumber, let w = r["width"] as? NSNumber, let h = r["height"] as? NSNumber else { return nil }
@@ -243,6 +247,11 @@ final class Pet: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKNavi
     let sizeItem = NSMenuItem(title: "Size", action: nil, keyEquivalent: "")
     sizeItem.submenu = sizes
     menu.addItem(sizeItem)
+    if let on = voiceOn {
+      let mute = item("Mute voice", #selector(toggleVoice))
+      mute.state = on ? .off : .on
+      menu.addItem(mute)
+    }
     menu.addItem(item("Open Agent Office", #selector(openOffice)))
     menu.addItem(item("Reload", #selector(reload)))
     menu.addItem(.separator())
@@ -254,6 +263,11 @@ final class Pet: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKNavi
     let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
     item.target = self
     return item
+  }
+
+  @objc private func toggleVoice() {
+    guard let on = voiceOn else { return }
+    web.evaluateJavaScript("window.pet && window.pet.setVoice && window.pet.setVoice(\(!on))", completionHandler: nil)
   }
 
   @objc private func pickCharacter(_ sender: NSMenuItem) {
