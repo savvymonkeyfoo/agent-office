@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { feedChanges, petStatus, shortName } from '../src/client/pet/mood.ts';
 import { startPet } from '../src/client/pet/main.ts';
@@ -111,8 +112,16 @@ describe('desktop pet page', () => {
     pet.applyFeed([rec('session_a', 'One', 'done')]);
     pet.hover(true);
     expect(bubble().textContent).toBe('All quiet in the office');
+    expect(root.hasAttribute('data-hover'), 'long lines open up in full').toBe(true);
     pet.hover(false);
     expect(bubble().hidden).toBe(true);
+    expect(root.hasAttribute('data-hover')).toBe(false);
+  });
+
+  it("long lines stop at three in the bubble, so it never covers the character's face", () => {
+    const css = readFileSync('src/client/pet/pet.css', 'utf8');
+    expect(css).toMatch(/\.pet-text \{[^}]*-webkit-line-clamp: 3/);
+    expect(css).toMatch(/#pet\[data-hover\] \.pet-text \{[^}]*line-clamp: unset/);
   });
 
   it('a session finishing gets a short note, and a new question a hop', () => {

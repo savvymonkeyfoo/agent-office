@@ -13,6 +13,10 @@ body { font-family: 'Nunito', system-ui, sans-serif; -webkit-user-select: none; 
   text-align: center; box-shadow: 0 3px 0 rgba(42, 34, 56, 0.25);
   animation: pet-pop 0.18s ease-out;
 }
+/* Long lines stop at three, so the bubble never covers the character's face (spoken lines are heard in full). */
+.pet-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
+/* Pointing at the pet shows the whole line. */
+#pet[data-hover] .pet-text { -webkit-line-clamp: unset; line-clamp: none; }
 .pet-bubble::after {
   content: ''; position: absolute; left: 50%; bottom: -8px; width: 10px; height: 10px; margin-left: -6px;
   background: inherit; border-right: 2.5px solid #2A2238; border-bottom: 2.5px solid #2A2238; transform: rotate(45deg);
