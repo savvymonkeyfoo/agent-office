@@ -54,9 +54,9 @@ describe('who pays for Haiku', () => {
 
   it('finds the Foundry endpoint in settings, either env shape, and lists models to try', () => {
     const list = { env: ['ANTHROPIC_FOUNDRY_BASE_URL=https://x.services.ai.azure.com/anthropic/', 'ANTHROPIC_FOUNDRY_API_KEY=k', 'ANTHROPIC_DEFAULT_SONNET_MODEL=claude-sonnet-5'] };
-    expect(foundryFrom({}, list)).toEqual({ baseUrl: 'https://x.services.ai.azure.com/anthropic', key: 'k', models: ['claude-haiku-5-5', 'claude-sonnet-5'] });
+    expect(foundryFrom({}, list)).toEqual({ baseUrl: 'https://x.services.ai.azure.com/anthropic', key: 'k', models: ['claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-sonnet-5'] });
     expect(foundryFrom({ ANTHROPIC_DEFAULT_HAIKU_MODEL: 'my-haiku' }, { env: { ANTHROPIC_FOUNDRY_BASE_URL: 'https://y', ANTHROPIC_FOUNDRY_API_KEY: 'k2' } }))
-      .toEqual({ baseUrl: 'https://y', key: 'k2', models: ['my-haiku', 'claude-haiku-5-5'] });
+      .toEqual({ baseUrl: 'https://y', key: 'k2', models: ['my-haiku', 'claude-haiku-5-5', 'claude-sonnet-5-5'] });
     expect(foundryFrom({}, { env: {} })).toBeNull();
   });
 

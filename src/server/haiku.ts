@@ -130,7 +130,7 @@ function settingsEnv(settings: unknown): Record<string, string> {
 
 /**
  * Your Microsoft Foundry endpoint and key, from the environment or Claude Code's settings, and the models to try:
- * your Haiku choice, then Haiku, then your Sonnet deployment (in case Haiku isn't deployed there).
+ * your choice, Haiku, then Sonnet 5.5 and your Sonnet setting (in case Haiku isn't deployed there).
  */
 export function foundryFrom(env: NodeJS.ProcessEnv, settings: unknown): Foundry | null {
   const fromSettings = settingsEnv(settings);
@@ -138,7 +138,7 @@ export function foundryFrom(env: NodeJS.ProcessEnv, settings: unknown): Foundry 
   const baseUrl = get('ANTHROPIC_FOUNDRY_BASE_URL').replace(/\/$/, '');
   const key = get('ANTHROPIC_FOUNDRY_API_KEY');
   if (!baseUrl.startsWith('https://') || !key) return null;
-  const models = [get('AGENT_OFFICE_WORK_MODEL'), get('ANTHROPIC_DEFAULT_HAIKU_MODEL'), MODEL, get('ANTHROPIC_DEFAULT_SONNET_MODEL')].filter(Boolean);
+  const models = [get('AGENT_OFFICE_WORK_MODEL'), get('ANTHROPIC_DEFAULT_HAIKU_MODEL'), MODEL, 'claude-sonnet-5-5', get('ANTHROPIC_DEFAULT_SONNET_MODEL')].filter(Boolean);
   return { baseUrl, key, models: [...new Set(models)] };
 }
 

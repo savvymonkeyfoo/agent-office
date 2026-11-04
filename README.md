@@ -110,7 +110,7 @@ Who pays:
   `echo work > ~/.agent-office/haiku-provider` (or `AGENT_OFFICE_HAIKU=work`). This wins over an office API key on that computer.
   With Microsoft Foundry, the office calls your endpoint directly, with `ANTHROPIC_FOUNDRY_BASE_URL` and
   `ANTHROPIC_FOUNDRY_API_KEY` from your environment or Claude Code's settings. It tries `AGENT_OFFICE_WORK_MODEL`,
-  `ANTHROPIC_DEFAULT_HAIKU_MODEL`, `claude-haiku-5-5`, then your `ANTHROPIC_DEFAULT_SONNET_MODEL`, and keeps the first one
+  `ANTHROPIC_DEFAULT_HAIKU_MODEL`, `claude-haiku-5-5`, `claude-sonnet-5-5`, then your `ANTHROPIC_DEFAULT_SONNET_MODEL`, and keeps the first one
   that's deployed. Other work setups run `claude -p --model haiku` as they are.
 - A day's calls are capped at 400 (`AGENT_OFFICE_HAIKU_DAILY`); each costs about a tenth of a cent.
   `AGENT_OFFICE_HAIKU=0` turns the helpers off; `AGENT_OFFICE_HAIKU=api` allows only the API key.
