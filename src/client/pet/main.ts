@@ -11,6 +11,8 @@ import type { AgentRecord, FeedPayload } from '../../shared/agent.ts';
 /** How long a one-off message ("… is done") stays up, and how long the bubble shows when work starts. */
 const NOTE_MS = 8000;
 const PEEK_MS = 5000;
+/** The office's own lines are a little longer, so they stay up longer. */
+const SAY_MS = 12_000;
 /** How often to pick up projects hidden or shown again in the office. */
 const HIDDEN_POLL_MS = 10_000;
 
@@ -44,14 +46,18 @@ export function startPet(root: HTMLElement, { kind, officeUrl, createScene = cre
 
   let status: PetStatus = petStatus(null);
   let records: AgentRecord[] | null = null;
-  let note: { text: string; until: number } | null = null;
+  let note: { text: string; until: number; fromOffice?: boolean } | null = null;
   let peekUntil = 0;
   let hovering = false;
+  /** Once the office sends its own lines (Haiku), the pet stops making up its "… is done" notes. */
+  let announced = false;
 
   function render(now = Date.now()) {
     if (note && note.until <= now) note = null;
     // A waiting question always shows; otherwise a fresh note, then the status while peeking, hovered or offline.
-    const shown = status.mood === 'needs' ? status.text
+    // A fresh line from the office shows for a while even over a waiting question; the question comes back after.
+    const shown = note?.fromOffice ? note.text
+      : status.mood === 'needs' ? status.text
       : note ? note.text
       : (hovering || peekUntil > now || status.mood === 'offline') ? (status.text ?? 'All quiet in the office')
       : null;
@@ -99,7 +105,7 @@ export function startPet(root: HTMLElement, { kind, officeUrl, createScene = cre
     if (list) {
       const changes = feedChanges(records, list);
       if (changes.newlyNeeding.length) scene.hop();
-      if (changes.finished.length) {
+      if (changes.finished.length && !announced) {
         const [first] = changes.finished;
         note = { text: changes.finished.length === 1 ? `${shortName(first)} is done` : `${changes.finished.length} sessions are done`, until: Date.now() + NOTE_MS };
       }
@@ -108,6 +114,14 @@ export function startPet(root: HTMLElement, { kind, officeUrl, createScene = cre
     records = list;
     status = next;
     scene.setMood(status.mood);
+    render();
+  }
+
+  /** A line from the office (written by Haiku, and read out loud on the computer if the voice is on). */
+  function say(line: string, urgent = false) {
+    announced = true;
+    note = { text: line, until: Date.now() + SAY_MS, fromOffice: true };
+    if (urgent) scene.hop();
     render();
   }
 
@@ -130,6 +144,7 @@ export function startPet(root: HTMLElement, { kind, officeUrl, createScene = cre
   return {
     applyFeed,
     setHiddenProjects,
+    say,
     click,
     hover,
     get status() { return status; },
@@ -161,6 +176,9 @@ if (!import.meta.env.VITEST) {
     events.onmessage = (e) => pet.applyFeed(JSON.parse(e.data));
     // EventSource retries on its own; until it's back, the pet dozes.
     events.onerror = () => pet.applyFeed(null);
+    // The office's spoken lines; an older office without them just never sends any.
+    const lines = new EventSource('/api/announcements');
+    lines.onmessage = (e) => { const a = JSON.parse(e.data); if (typeof a?.text === 'string') pet.say(a.text, !!a.urgent); };
     const syncHidden = () => serverHiddenSync.load().then((list) => list && pet.setHiddenProjects(list));
     syncHidden();
     setInterval(syncHidden, HIDDEN_POLL_MS);

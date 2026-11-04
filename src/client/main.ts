@@ -8,6 +8,7 @@ import { sessionUrl, appUrl } from '../cloud/sessions.ts';
 import { startClock } from './clock.ts';
 import { bindPetButton } from './pet-button.ts';
 import { mountLabPanels } from './lab-panels.ts';
+import { mountAssistant } from './assistant.ts';
 import type { AgentRecord, FeedPayload } from '../shared/agent.ts';
 
 export { hasWebGL };
@@ -51,6 +52,7 @@ export function boot({ createOffice }: BootOptions = {}) {
     selected = next;
     office.select?.(selected);
     if (!selected) { card.hidden = true; return; }
+    assistant?.close();
     renderCard(card, records.get(selected)!, {
       close: () => select(null),
       acknowledge,
@@ -70,6 +72,12 @@ export function boot({ createOffice }: BootOptions = {}) {
       body: JSON.stringify({ sessionId: record.sessionId }),
     }).then(() => select(null), () => select(selected));
   }
+
+  const assistantButton = document.getElementById('assistant');
+  const assistantPanel = document.getElementById('assistant-panel');
+  const assistant = !import.meta.env.VITEST && assistantButton instanceof HTMLButtonElement && assistantPanel
+    ? mountAssistant(assistantButton, assistantPanel, { onOpen: () => select(null) })
+    : null;
 
   office.onPick(select);
   office.onHover((key, x, y) => showTooltip(tooltip, key ? records.get(key) : undefined, x, y));

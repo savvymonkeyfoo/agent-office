@@ -87,6 +87,28 @@ npm run build:artifact   # writes dist/agent-office.html
 Publish `dist/agent-office.html` as an artifact that declares the `mcp` capability for `Claude Code Remote` → `list_sessions`.
 Click an agent to open its session on claude.ai. Got it is remembered in your browser only, and the usage panel is left out.
 
+## Haiku helpers
+
+Claude Haiku turns what the office sees into a few words:
+
+- **Catch me up** (the sparkle button, top right): come back after 20 minutes or more and the office opens
+  with a short briefing on what needs you, what finished and what's still moving. Press it any time for the last few hours.
+- **Ask the office**: type a question ("what's waiting on me?") in the same panel.
+- **The pet speaks**: when threads finish, ask for you or look stuck, the desktop pet says one line
+  and your computer reads it out loud (`say` on macOS). Untick *The desktop pet reads updates out loud* to keep it quiet.
+- **Might be stuck**: a working thread that sits on one checklist step for 45 minutes gets checked (its recent
+  activity, in cloud mode); if Haiku thinks it's looping or blocked, its card says why.
+
+Who pays:
+
+- With an API key just for the office, calls go to the Anthropic API and use that account's credit.
+  Put the key in `~/.agent-office/anthropic-key` (one line), or set `AGENT_OFFICE_ANTHROPIC_KEY`.
+  The office never uses `ANTHROPIC_API_KEY` or `ANTHROPIC_BASE_URL`, so a work key or gateway never pays.
+- Without one, it runs `claude -p --model haiku` on your claude.ai login (your plan's usage), unless
+  Claude Code's settings use a work key or gateway, in which case the helpers stay off.
+- A day's calls are capped at 400 (`AGENT_OFFICE_HAIKU_DAILY`); each costs about a tenth of a cent.
+  `AGENT_OFFICE_HAIKU=0` turns the helpers off; `AGENT_OFFICE_HAIKU=api` allows only the API key.
+
 ## Requirements
 
 - Node.js 20 or newer
@@ -97,7 +119,9 @@ Works on macOS, Linux and Windows.
 
 ## Privacy
 
-Agent Office only reads local Claude Code data, and never sends anything anywhere.
+Agent Office only reads local Claude Code data, and never sends anything anywhere except to Anthropic:
+cloud mode lists your sessions there, and the Haiku helpers (above) send session names, status, checklists
+and questions to Claude Haiku. `AGENT_OFFICE_HAIKU=0` turns those off.
 
 - It runs `claude agents --json --all` and reads session transcripts in your Claude config folder
   (`$CLAUDE_CONFIG_DIR`, or `.claude` in your home folder).

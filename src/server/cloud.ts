@@ -8,7 +8,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AgentRecord } from '../shared/agent.ts';
-import { buildCloudList, mapCloudState, questionFromEvents, type CloudSession } from '../cloud/sessions.ts';
+import { activityFromEvents, buildCloudList, mapCloudState, questionFromEvents, type CloudSession } from '../cloud/sessions.ts';
 import type { Question } from '../shared/agent.ts';
 import { claudeConfigDir } from './transcript.ts';
 
@@ -315,10 +315,22 @@ export async function listCloudSessions(env: NodeJS.ProcessEnv = process.env): P
   const coordinatorSessions = sessionsFromResponse(coordinators);
   nameProjects([], coordinatorSessions);
   for (const session of coordinatorSessions) byId.set(session.id, session);
+  lastLogin = login;
   const sessions = [...byId.values()];
   await lookUpProjects(sessions, login);
   await lookUpQuestions(sessions, login);
   return nameProjects(sessions, []);
+}
+
+/** The login the last successful list used, for the occasional extra lookup between polls. */
+let lastLogin: Login | null = null;
+
+/** A cloud session's recent activity, as short lines, for the stuck check. */
+export async function cloudActivity(sessionId: string): Promise<string | null> {
+  if (!lastLogin) return null;
+  const res = await request(`/v1/code/sessions/${encodeURIComponent(sessionId)}/events?limit=60&sort_order=desc`, lastLogin, false);
+  const body = res.ok ? await res.json() as { data?: unknown } : null;
+  return Array.isArray(body?.data) ? activityFromEvents(body.data) : null;
 }
 
 /** What each waiting session asked, keyed `id@updated_at` so it's fetched once per turn. */

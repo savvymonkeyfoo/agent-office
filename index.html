@@ -40,6 +40,22 @@
       <path d="M15.5 15.5 21 21M8 10.5h5M10.5 8v5"/>
     </svg>
   </button>
+  <button id="assistant" class="btn icon assistant" type="button" aria-pressed="false" title="Catch me up and ask the office" aria-label="Catch me up and ask the office" hidden>
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true">
+      <path d="M11 2.5l1.9 5.1 5.1 1.9-5.1 1.9L11 16.5l-1.9-5.1L4 9.5l5.1-1.9z"/>
+      <path d="M18.5 14l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9z"/>
+    </svg>
+  </button>
+  <aside id="assistant-panel" class="card assistant-panel" aria-label="Catch me up" hidden>
+    <header><h2>Catch me up</h2><button class="btn icon" type="button" data-close aria-label="Close">×</button></header>
+    <div class="briefing" data-briefing aria-live="polite"></div>
+    <form class="ask" data-ask>
+      <label class="label" for="ask-input">Ask the office</label>
+      <div class="ask-row"><input id="ask-input" name="question" maxlength="500" autocomplete="off" placeholder="What's waiting on me?"><button class="btn primary" type="submit">Ask</button></div>
+    </form>
+    <div class="answer" data-answer aria-live="polite" hidden></div>
+    <label class="voice"><input type="checkbox" data-voice> The desktop pet reads updates out loud</label>
+  </aside>
   <button id="pet" class="btn icon pet" type="button" title="Bring back the desktop pet" aria-label="Bring back the desktop pet" hidden>
     <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true">
       <ellipse cx="12" cy="16" rx="5" ry="4.2"/>

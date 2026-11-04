@@ -5,6 +5,18 @@ import type { AckStore } from './acknowledged.ts';
 import { projectList, type HiddenProjectsStore } from './hidden-projects.ts';
 import type { PetLauncher } from './pet.ts';
 import { isThisMachine } from './tracking.ts';
+import type { Insights } from './insights.ts';
+import type { Haiku } from './haiku.ts';
+import type { SettingsStore } from './settings.ts';
+
+/** The Haiku-backed helpers: briefing, ask box, pet lines and shared settings. */
+export interface AssistantApi {
+  insights: Insights;
+  haiku: Haiku;
+  settings: SettingsStore;
+}
+
+const MAX_QUESTION = 500;
 
 export interface UsageApi {
   read(): unknown;
@@ -17,7 +29,7 @@ const MAX_BODY = 4096;
 const MAX_PROJECTS_BODY = 64 * 1024;
 const MAX_ID = 200;
 
-export function createApi(feed: Feed, acknowledged?: AckStore, usage?: UsageApi, hiddenProjects?: HiddenProjectsStore, pet?: PetLauncher): ApiHandler {
+export function createApi(feed: Feed, acknowledged?: AckStore, usage?: UsageApi, hiddenProjects?: HiddenProjectsStore, pet?: PetLauncher, assistant?: AssistantApi): ApiHandler {
   return async (req, res) => {
     const path = new URL(req.url ?? '/', 'http://local').pathname;
 
@@ -50,6 +62,8 @@ export function createApi(feed: Feed, acknowledged?: AckStore, usage?: UsageApi,
       req.on('close', unsubscribe);
       return true;
     }
+
+    if (assistant && path.startsWith('/api/') && await handleAssistant(assistant, req, res, path)) return true;
 
     if (req.method === 'GET' && path === '/api/pet' && pet) {
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
@@ -106,6 +120,56 @@ export function createApi(feed: Feed, acknowledged?: AckStore, usage?: UsageApi,
 
     return false;
   };
+}
+
+const json = (res: ServerResponse, body: unknown) => {
+  res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+  res.end(JSON.stringify(body));
+  return true;
+};
+
+async function handleAssistant({ insights, haiku, settings }: AssistantApi, req: IncomingMessage, res: ServerResponse, path: string) {
+  if (req.method === 'GET' && path === '/api/assistant') return json(res, { route: haiku.route(), ...settings.get() });
+
+  if (req.method === 'PUT' && path === '/api/settings') {
+    if (!req.headers['content-type']?.startsWith('application/json')) return reply(res, 415, 'Send JSON.');
+    try {
+      return json(res, settings.update(JSON.parse(await readBody(req))));
+    } catch {
+      return reply(res, 400, 'Body must be JSON settings.');
+    }
+  }
+
+  if (req.method === 'GET' && path === '/api/briefing') {
+    const since = Number(new URL(req.url ?? '/', 'http://local').searchParams.get('since'));
+    if (!Number.isFinite(since) || since <= 0) return reply(res, 400, 'Give ?since= as epoch milliseconds.');
+    return json(res, await insights.briefing(since));
+  }
+
+  if (req.method === 'POST' && path === '/api/ask') {
+    // Costs a model call: JSON only, so other sites can't post here.
+    if (!req.headers['content-type']?.startsWith('application/json')) return reply(res, 415, 'Send JSON.');
+    let question: unknown;
+    try {
+      question = JSON.parse(await readBody(req)).question;
+    } catch {
+      return reply(res, 400, 'Body must be JSON: { "question": "…" }.');
+    }
+    if (typeof question !== 'string' || !question.trim() || question.length > MAX_QUESTION) return reply(res, 400, 'Missing or too long question.');
+    if (!haiku.route()) return reply(res, 409, 'Haiku is off: add an API key for the office (see the README).');
+    const answer = await insights.ask(question);
+    return answer ? json(res, { answer }) : reply(res, 502, "Couldn't get an answer just now. Try again in a minute.");
+  }
+
+  if (req.method === 'GET' && path === '/api/announcements') {
+    res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive' });
+    res.write(': listening\n\n');
+    const unsubscribe = insights.onAnnouncement((a) => res.write(`data: ${JSON.stringify(a)}\n\n`));
+    req.on('close', unsubscribe);
+    return true;
+  }
+
+  return false;
 }
 
 function reply(res: ServerResponse, status: number, message: string) {
