@@ -106,6 +106,9 @@ Who pays:
   The office never uses `ANTHROPIC_API_KEY` or `ANTHROPIC_BASE_URL`, so a work key or gateway never pays.
 - Without one, it runs `claude -p --model haiku` on your claude.ai login (your plan's usage), unless
   Claude Code's settings use a work key or gateway, in which case the helpers stay off.
+- On a computer where your employer's setup should pay (e.g. Claude Code through Microsoft Foundry), opt in with
+  `echo work > ~/.agent-office/haiku-provider` (or `AGENT_OFFICE_HAIKU=work`). The office then runs
+  `claude -p --model haiku` with that setup as it is. This wins over an office API key on that computer.
 - A day's calls are capped at 400 (`AGENT_OFFICE_HAIKU_DAILY`); each costs about a tenth of a cent.
   `AGENT_OFFICE_HAIKU=0` turns the helpers off; `AGENT_OFFICE_HAIKU=api` allows only the API key.
 

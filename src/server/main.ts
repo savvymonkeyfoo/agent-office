@@ -63,7 +63,7 @@ try {
 }
 console.log(`Agent Office is running at http://${HOST}:${port}${cloud ? ', showing your Claude Code cloud sessions' : ''}`);
 if (lan) lanUrls(port).forEach((line) => console.log(line));
-console.log({ api: 'Haiku helpers on, paid from the office\'s API key.', login: 'Haiku helpers on, through your claude.ai login.', none: 'Haiku helpers off (no office API key, and Claude Code uses a work key or gateway).' }[haiku.route() ?? 'none']);
+console.log({ api: 'Haiku helpers on, paid from the office\'s API key.', login: 'Haiku helpers on, through your claude.ai login.', work: 'Haiku helpers on, through Claude Code\'s work setup on this computer (you opted in).', none: 'Haiku helpers off (no office API key, and Claude Code uses a work key or gateway: run `echo work > ~/.agent-office/haiku-provider` to let that pay).' }[haiku.route() ?? 'none']);
 
 const startup = feed.current();
 if (!Array.isArray(startup)) console.error(startup.error);

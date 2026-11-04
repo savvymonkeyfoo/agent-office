@@ -1,6 +1,6 @@
 // Haiku helpers: who pays, what the office notices, and the briefing, pet lines, stuck check and ask box built on it.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createHaiku, officeKey, type Haiku, type HaikuRequest } from '../src/server/haiku.ts';
+import { createHaiku, officeKey, wantsWork, type Haiku, type HaikuRequest } from '../src/server/haiku.ts';
 import { createInsights, describeChanges, parseStuck, plainBriefing, plainLine, recordLine } from '../src/server/insights.ts';
 import { activityFromEvents } from '../src/cloud/sessions.ts';
 import { cleanSettings } from '../src/server/settings.ts';
@@ -26,18 +26,30 @@ describe('who pays for Haiku', () => {
   });
 
   it('falls back to the claude.ai login, but never on a work setup', async () => {
-    const callCli = vi.fn(async () => 'hi');
+    const callCli = vi.fn(async (_r: unknown, _e: unknown, _w?: boolean) => 'hi');
     const callApi = vi.fn(async () => 'api');
     const plain = createHaiku({ env: { ANTHROPIC_API_KEY: 'sk-work' }, callApi, callCli, workSettings: () => false });
     expect(plain.route()).toBe('login');
     expect(await plain.ask({ system: 's', prompt: 'p' })).toBe('hi');
     expect(callApi).not.toHaveBeenCalled();
-    expect(callCli.mock.calls[0]).toHaveLength(2);
+    expect(callCli.mock.calls[0][2]).toBe(false); // work keys stripped
 
     const work = createHaiku({ env: {}, callApi, callCli, workSettings: () => true });
     expect(work.route()).toBeNull();
     expect(await work.ask({ system: 's', prompt: 'p' })).toBeNull();
     expect(createHaiku({ env: { AGENT_OFFICE_HAIKU: '0', AGENT_OFFICE_ANTHROPIC_KEY: 'k' } }).route()).toBeNull();
+  });
+
+  it('uses the work setup only where you opted in, and leaves its keys in place', async () => {
+    const callCli = vi.fn(async (_r: unknown, _e: unknown, _w?: boolean) => 'via work');
+    const work = createHaiku({ env: { ANTHROPIC_API_KEY: 'sk-work', AGENT_OFFICE_ANTHROPIC_KEY: 'k' }, callCli, workSettings: () => true, optedInToWork: () => true });
+    expect(work.route()).toBe('work');
+    expect(await work.ask({ system: 's', prompt: 'p' })).toBe('via work');
+    expect(callCli.mock.calls[0][2]).toBe(true);
+    expect(wantsWork({ AGENT_OFFICE_HAIKU: 'work' }, () => '')).toBe(true);
+    expect(wantsWork({}, () => 'work\n')).toBe(true);
+    expect(wantsWork({ AGENT_OFFICE_HAIKU: 'api' }, () => 'work')).toBe(false);
+    expect(wantsWork({}, () => { throw new Error('none'); })).toBe(false);
   });
 
   it('stops for the day after the cap, and survives a failed call', async () => {
