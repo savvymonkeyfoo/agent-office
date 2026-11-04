@@ -1,6 +1,6 @@
 // Haiku helpers: who pays, what the office notices, and the briefing, pet lines, stuck check and ask box built on it.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createHaiku, officeKey, wantsWork, type Haiku, type HaikuRequest } from '../src/server/haiku.ts';
+import { createHaiku, foundryFrom, officeKey, wantsWork, type Haiku, type HaikuRequest } from '../src/server/haiku.ts';
 import { createInsights, describeChanges, parseStuck, plainBriefing, plainLine, recordLine } from '../src/server/insights.ts';
 import { activityFromEvents } from '../src/cloud/sessions.ts';
 import { cleanSettings } from '../src/server/settings.ts';
@@ -50,6 +50,22 @@ describe('who pays for Haiku', () => {
     expect(wantsWork({}, () => 'work\n')).toBe(true);
     expect(wantsWork({ AGENT_OFFICE_HAIKU: 'api' }, () => 'work')).toBe(false);
     expect(wantsWork({}, () => { throw new Error('none'); })).toBe(false);
+  });
+
+  it('finds the Foundry endpoint in settings, either env shape, and lists models to try', () => {
+    const list = { env: ['ANTHROPIC_FOUNDRY_BASE_URL=https://x.services.ai.azure.com/anthropic/', 'ANTHROPIC_FOUNDRY_API_KEY=k', 'ANTHROPIC_DEFAULT_SONNET_MODEL=claude-sonnet-5'] };
+    expect(foundryFrom({}, list)).toEqual({ baseUrl: 'https://x.services.ai.azure.com/anthropic', key: 'k', models: ['claude-haiku-5-5', 'claude-sonnet-5'] });
+    expect(foundryFrom({ ANTHROPIC_DEFAULT_HAIKU_MODEL: 'my-haiku' }, { env: { ANTHROPIC_FOUNDRY_BASE_URL: 'https://y', ANTHROPIC_FOUNDRY_API_KEY: 'k2' } }))
+      .toEqual({ baseUrl: 'https://y', key: 'k2', models: ['my-haiku', 'claude-haiku-5-5'] });
+    expect(foundryFrom({}, { env: {} })).toBeNull();
+  });
+
+  it('pays through Foundry directly when opted in and set up', async () => {
+    const callFoundry = vi.fn(async () => 'via foundry');
+    const callCli = vi.fn(async () => 'cli');
+    const haiku = createHaiku({ env: { ANTHROPIC_FOUNDRY_BASE_URL: 'https://z', ANTHROPIC_FOUNDRY_API_KEY: 'k' }, optedInToWork: () => true, callFoundry, callCli });
+    expect(await haiku.ask({ system: 's', prompt: 'p' })).toBe('via foundry');
+    expect(callCli).not.toHaveBeenCalled();
   });
 
   it('stops for the day after the cap, and survives a failed call', async () => {
