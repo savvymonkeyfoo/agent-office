@@ -24,6 +24,8 @@ export interface AgentRecord extends SessionRecord {
   coordinator?: boolean;
   /** Cloud sessions waiting on you: what the agent asked, in full, and a decision card's options. */
   question?: Question;
+  /** Haiku's view of why a session that's been on one step a long time looks stuck. */
+  stuck?: string;
 }
 
 export interface Question {

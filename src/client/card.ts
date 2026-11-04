@@ -76,6 +76,7 @@ export function renderCard(card: HTMLElement, record: AgentRecord, actions: Card
       ${record.branch ? `<span>· ${escapeHtml(record.branch)}</span>` : ''}
       <span class="pill ${record.state}">${STATE_LABEL[record.state]}</span>
     </div>
+    ${record.stuck ? `<div class="section"><span class="label">Might be stuck</span><div class="stuck">${escapeHtml(record.stuck)}</div></div>` : ''}
     ${progressSection(record)}
     ${record.question ? questionSection(record.question, actions.expanded) : messageSection(record.lastMessage, actions.expanded)}
     <div class="section">

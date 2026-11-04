@@ -171,3 +171,23 @@ export function questionFromEvents(events: unknown[]): Question | null {
   }
   return null;
 }
+
+const short = (v: unknown, max: number) => {
+  const text = (typeof v === 'string' ? v : JSON.stringify(v) ?? '').replace(/\s+/g, ' ').trim();
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+};
+
+/** A session's latest events (newest first, as the API sends them) as short lines, oldest first: what it said, ran and got back. */
+export function activityFromEvents(events: unknown[]): string {
+  const lines: string[] = [];
+  for (const event of [...events].reverse()) {
+    const payload = (event as { payload?: { type?: string; message?: { content?: unknown } } } | null)?.payload;
+    if (!payload || !Array.isArray(payload.message?.content)) continue;
+    for (const block of payload.message.content as { type?: string; name?: string; text?: string; input?: unknown; content?: unknown; is_error?: boolean }[]) {
+      if (payload.type === 'assistant' && block.type === 'text' && block.text?.trim()) lines.push(`said: ${short(block.text, 200)}`);
+      else if (payload.type === 'assistant' && block.type === 'tool_use') lines.push(`ran ${block.name}: ${short(block.input, 160)}`);
+      else if (payload.type === 'user' && block.type === 'tool_result') lines.push(`${block.is_error ? 'error' : 'result'}: ${short(block.content, block.is_error ? 240 : 100)}`);
+    }
+  }
+  return lines.slice(-40).join('\n');
+}

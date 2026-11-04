@@ -5,7 +5,11 @@ import { createApi } from './api.ts';
 import { createFeed } from './feed.ts';
 import { listClaudeAgents } from './claude.ts';
 import { loadAgents } from './load.ts';
-import { cloudAckStore, cloudLimit, loadCloudAgents, wantsCloud } from './cloud.ts';
+import { cloudAckStore, cloudActivity, cloudLimit, loadCloudAgents, wantsCloud } from './cloud.ts';
+import { createHaiku } from './haiku.ts';
+import { createInsights } from './insights.ts';
+import { createSettingsStore } from './settings.ts';
+import { speak } from './speak.ts';
 import { createNeedsNotifier } from './notify.ts';
 import { createAckStore } from './acknowledged.ts';
 import { createHiddenProjectsStore } from './hidden-projects.ts';
@@ -37,13 +41,21 @@ function readUsage(): UsagePayload {
 const usage = { read: readUsage, enable: () => (enableTracking(tracking), readUsage()) };
 // NOTIFY=0 turns off the Mac notification when a cloud session starts needing you.
 const notifyNeeds = process.env.NOTIFY === '0' ? () => {} : createNeedsNotifier();
+const haiku = createHaiku();
+const settings = createSettingsStore();
+// The pet's lines are read out loud here, in the computer's own voice, while a pet is listening and its voice is on.
+const insights = createInsights({
+  haiku,
+  recentActivity: cloud ? (r) => cloudActivity(r.sessionId) : undefined,
+  speak: (a) => { if (settings.get().petVoice) speak(a.text); },
+});
 const feed = cloud
-  ? createFeed(async () => { const records = await loadCloudAgents({ now: Date.now(), acknowledged }); notifyNeeds(records); return records; })
-  : createFeed(() => loadAgents({ list: listClaudeAgents, now: Date.now(), acknowledged }));
+  ? createFeed(async () => { const records = await loadCloudAgents({ now: Date.now(), acknowledged }); notifyNeeds(records); return insights.observe(records); })
+  : createFeed(async () => insights.observe(await loadAgents({ list: listClaudeAgents, now: Date.now(), acknowledged })));
 await feed.poll(cloud ? CLOUD_POLL_MS : POLL_MS);
 
 try {
-  await startServer({ port, staticDir, api: createApi(feed, acknowledged, usage, createHiddenProjectsStore(), createPetLauncher({ root: fileURLToPath(new URL('../../..', import.meta.url)) })), lan });
+  await startServer({ port, staticDir, api: createApi(feed, acknowledged, usage, createHiddenProjectsStore(), createPetLauncher({ root: fileURLToPath(new URL('../../..', import.meta.url)) }), { insights, haiku, settings }), lan });
 } catch (error) {
   const inUse = (error as NodeJS.ErrnoException).code === 'EADDRINUSE';
   console.error(inUse ? `Port ${port} is already in use. Start with another port, e.g. PORT=${port + 1}.` : String(error));
@@ -51,6 +63,7 @@ try {
 }
 console.log(`Agent Office is running at http://${HOST}:${port}${cloud ? ', showing your Claude Code cloud sessions' : ''}`);
 if (lan) lanUrls(port).forEach((line) => console.log(line));
+console.log({ api: 'Haiku helpers on, paid from the office\'s API key.', login: 'Haiku helpers on, through your claude.ai login.', none: 'Haiku helpers off (no office API key, and Claude Code uses a work key or gateway).' }[haiku.route() ?? 'none']);
 
 const startup = feed.current();
 if (!Array.isArray(startup)) console.error(startup.error);

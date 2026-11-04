@@ -167,6 +167,30 @@ a.btn { display: inline-flex; align-items: center; text-decoration: none; box-si
   position: absolute; right: 68px; top: calc(16px + env(safe-area-inset-top, 0px));
   min-width: 44px; min-height: 44px; display: grid; place-items: center;
 }
+/* Catch me up / ask the office, left of the close-up button; only when Haiku is on here. */
+.assistant {
+  position: absolute; right: 172px; top: calc(16px + env(safe-area-inset-top, 0px));
+  min-width: 44px; min-height: 44px; display: grid; place-items: center;
+}
+.assistant[hidden] { display: none; }
+.assistant[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: #2B2545; }
+.assistant:not([hidden]) ~ .pet { right: 224px; }
+.assistant-panel .briefing p, .assistant-panel .answer p { margin: 0; font-size: 14px; line-height: 1.5; }
+.assistant-panel .briefing:empty { display: none; }
+.assistant-panel .dim { color: var(--muted); }
+.assistant-panel .ask { display: flex; flex-direction: column; gap: 6px; }
+.assistant-panel .ask-row { display: flex; gap: 6px; }
+.assistant-panel .ask input {
+  flex: 1; min-width: 0; min-height: 36px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--chip); color: var(--ink); font: 500 14px var(--body);
+}
+.assistant-panel .answer { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 10px; background: var(--chip); }
+.assistant-panel .answer[hidden] { display: none; }
+.assistant-panel .answer .q { color: var(--muted); font-weight: 700; }
+.assistant-panel .voice { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); }
+.assistant-panel .voice input { accent-color: var(--amber); }
+/* A session that's been on one step a long time and looks stuck. */
+.card .stuck { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--amber); color: var(--ink); font-size: 13px; line-height: 1.4; }
 /* Bring back the desktop pet, left of the close-up button; only once the pet is set up here. */
 .pet {
   position: absolute; right: 172px; top: calc(16px + env(safe-area-inset-top, 0px));
@@ -226,7 +250,7 @@ body.lab {
   color-scheme: light;
 }
 body.lab .btn:hover { background: #E8D7BC; }
-body.lab .chip[aria-pressed="true"], body.lab .zoom[aria-pressed="true"] { background: #E07B54; border-color: #E07B54; color: #FFFFFF; }
+body.lab .chip[aria-pressed="true"], body.lab .zoom[aria-pressed="true"], body.lab .assistant[aria-pressed="true"] { background: #E07B54; border-color: #E07B54; color: #FFFFFF; }
 
 /* Innovation lab panels: only in the lab. */
 body:not(.lab) .lab-only { display: none !important; }
