@@ -12,7 +12,7 @@ import { createSettingsStore } from './settings.ts';
 import { speak } from './speak.ts';
 import { createNeedsNotifier } from './notify.ts';
 import { createAckStore } from './acknowledged.ts';
-import { createHiddenProjectsStore } from './hidden-projects.ts';
+import { createHiddenProjectsStore, workProjectsFile } from './hidden-projects.ts';
 import { createPetLauncher } from './pet.ts';
 import { limitsFile, readLimits } from './limits.ts';
 import { weekStart, weeklyTokens } from './tokens.ts';
@@ -55,7 +55,7 @@ const feed = cloud
 await feed.poll(cloud ? CLOUD_POLL_MS : POLL_MS);
 
 try {
-  await startServer({ port, staticDir, api: createApi(feed, acknowledged, usage, createHiddenProjectsStore(), createPetLauncher({ root: fileURLToPath(new URL('../../..', import.meta.url)) }), { insights, haiku, settings }), lan });
+  await startServer({ port, staticDir, api: createApi(feed, acknowledged, usage, createHiddenProjectsStore(), createPetLauncher({ root: fileURLToPath(new URL('../../..', import.meta.url)) }), { insights, haiku, settings }, createHiddenProjectsStore(workProjectsFile())), lan });
 } catch (error) {
   const inUse = (error as NodeJS.ErrnoException).code === 'EADDRINUSE';
   console.error(inUse ? `Port ${port} is already in use. Start with another port, e.g. PORT=${port + 1}.` : String(error));

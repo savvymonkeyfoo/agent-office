@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
-import { createHiddenProjectsStore, hiddenProjectsFile } from '../src/server/hidden-projects.ts';
+import { createHiddenProjectsStore, hiddenProjectsFile, workProjectsFile } from '../src/server/hidden-projects.ts';
 import { createFeed } from '../src/server/feed.ts';
 import { createApi } from '../src/server/api.ts';
 import { startServer } from '../src/server/http.ts';
@@ -33,6 +33,20 @@ describe('hidden projects on the server', () => {
 
   it('lives at ~/.agent-office/hidden-projects.json', () => {
     expect(hiddenProjectsFile('/home/alex')).toBe(join('/home/alex', '.agent-office', 'hidden-projects.json'));
+    expect(workProjectsFile('/home/alex')).toBe(join('/home/alex', '.agent-office', 'work-projects.json'));
+  });
+
+  it('keeps Capgemini projects in their own list', async () => {
+    const staticDir = mkdtempSync(join(tmpdir(), 'office-static-'));
+    writeFileSync(join(staticDir, 'index.html'), 'page');
+    const hidden = createHiddenProjectsStore(tmpFile());
+    const work = createHiddenProjectsStore(tmpFile());
+    server = await startServer({ port: 0, staticDir, api: createApi(createFeed(async () => []), undefined, undefined, hidden, undefined, undefined, work) });
+    const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    const res = await fetch(`${base}/api/work-projects`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: '["AIE reporting"]' });
+    expect(res.status).toBe(204);
+    expect(await (await fetch(`${base}/api/work-projects`)).json()).toEqual(['AIE reporting']);
+    expect(hidden.get()).toEqual([]);
   });
 
   it('starts empty, saves what the office sends, and reads it back after a restart', async () => {
