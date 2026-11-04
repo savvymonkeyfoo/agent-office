@@ -2,7 +2,7 @@ import './style.css';
 import { createOfficeScene } from './office-scene.ts';
 import { renderCard, showTooltip } from './card.ts';
 import { startUsagePanel } from './usage.ts';
-import { mountProjectFilter, serverHiddenSync, serverWorkSync } from './projects.ts';
+import { mountProjectFilter, serverHiddenSync, serverKindsSync } from './projects.ts';
 import { hasWebGL } from './webgl.ts';
 import { sessionUrl, appUrl } from '../cloud/sessions.ts';
 import { startClock } from './clock.ts';
@@ -88,7 +88,7 @@ export function boot({ createOffice }: BootOptions = {}) {
     ? mountLabPanels({ strip: labHosts[0]!, list: labHosts[1]!, popup: labHosts[2]!, feed: labHosts[3]! }, (key) => select(key))
     : null;
 
-  const projects = mountProjectFilter(document.getElementById('projects')!, () => last && applyFeed(last), import.meta.env.VITEST ? undefined : serverHiddenSync, import.meta.env.VITEST ? undefined : serverWorkSync);
+  const projects = mountProjectFilter(document.getElementById('projects')!, () => last && applyFeed(last), import.meta.env.VITEST ? undefined : serverHiddenSync, import.meta.env.VITEST ? undefined : serverKindsSync);
   let last: FeedPayload | null = null;
 
   function applyFeed(payload: FeedPayload) {

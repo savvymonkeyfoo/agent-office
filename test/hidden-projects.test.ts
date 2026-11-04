@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
-import { createHiddenProjectsStore, hiddenProjectsFile, workProjectsFile } from '../src/server/hidden-projects.ts';
+import { createHiddenProjectsStore, createProjectKindsStore, hiddenProjectsFile, projectKindsFile } from '../src/server/hidden-projects.ts';
 import { createFeed } from '../src/server/feed.ts';
 import { createApi } from '../src/server/api.ts';
 import { startServer } from '../src/server/http.ts';
@@ -33,19 +33,30 @@ describe('hidden projects on the server', () => {
 
   it('lives at ~/.agent-office/hidden-projects.json', () => {
     expect(hiddenProjectsFile('/home/alex')).toBe(join('/home/alex', '.agent-office', 'hidden-projects.json'));
-    expect(workProjectsFile('/home/alex')).toBe(join('/home/alex', '.agent-office', 'work-projects.json'));
+    expect(projectKindsFile('/home/alex')).toBe(join('/home/alex', '.agent-office', 'project-kinds.json'));
   });
 
-  it('keeps Capgemini projects in their own list', async () => {
+  it('keeps Capgemini/personal marks through a restart, one project at a time', async () => {
     const staticDir = mkdtempSync(join(tmpdir(), 'office-static-'));
     writeFileSync(join(staticDir, 'index.html'), 'page');
+    const file = join(mkdtempSync(join(tmpdir(), 'office-home-')), '.agent-office', 'project-kinds.json');
     const hidden = createHiddenProjectsStore(tmpFile());
-    const work = createHiddenProjectsStore(tmpFile());
-    server = await startServer({ port: 0, staticDir, api: createApi(createFeed(async () => []), undefined, undefined, hidden, undefined, undefined, work) });
-    const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-    const res = await fetch(`${base}/api/work-projects`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: '["AIE reporting"]' });
-    expect(res.status).toBe(204);
-    expect(await (await fetch(`${base}/api/work-projects`)).json()).toEqual(['AIE reporting']);
+    const boot = async () => {
+      server?.close();
+      server = await startServer({ port: 0, staticDir, api: createApi(createFeed(async () => []), undefined, undefined, hidden, undefined, undefined, createProjectKindsStore(file)) });
+      return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    };
+    const mark = (base: string, body: unknown) => fetch(`${base}/api/project-kinds`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    let base = await boot();
+    expect(await (await fetch(`${base}/api/project-kinds`)).json()).toEqual({});
+    expect((await mark(base, { project: 'Keen Bean', kind: 'personal' })).status).toBe(204);
+    expect((await mark(base, { project: 'AIE reporting', kind: 'work' })).status).toBe(204);
+    expect((await mark(base, { project: 'x', kind: 'other' })).status).toBe(400);
+    expect((await mark(base, ['Keen Bean'])).status).toBe(400);
+
+    base = await boot();
+    expect(await (await fetch(`${base}/api/project-kinds`)).json()).toEqual({ 'Keen Bean': 'personal', 'AIE reporting': 'work' });
+    expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({ 'Keen Bean': 'personal', 'AIE reporting': 'work' });
     expect(hidden.get()).toEqual([]);
   });
 
