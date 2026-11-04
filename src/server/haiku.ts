@@ -2,8 +2,8 @@
 // It pays with an Anthropic API key kept only for the office (your API credit), else falls back to the
 // `claude` CLI on your claude.ai login. It never reads ANTHROPIC_API_KEY or ANTHROPIC_BASE_URL itself: on a work
 // laptop those point at the employer's gateway (e.g. Foundry). Only if you opt in on that computer
-// (`echo work > ~/.agent-office/haiku-provider`, or AGENT_OFFICE_HAIKU=work) does it run `claude` with your
-// work setup as it is, so the gateway pays.
+// (`echo work > ~/.agent-office/haiku-provider`, or AGENT_OFFICE_HAIKU=work) does the work setup pay: the office
+// calls your Microsoft Foundry endpoint directly (address and key from Claude Code's settings), else runs `claude`.
 import { execFile } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
@@ -58,10 +58,11 @@ interface HaikuOptions {
   callCli?: (request: HaikuRequest, env: NodeJS.ProcessEnv, work?: boolean) => Promise<string | null>;
   workSettings?: () => boolean;
   optedInToWork?: () => boolean;
+  callFoundry?: (foundry: Foundry, request: HaikuRequest) => Promise<string | null>;
   now?: () => number;
 }
 
-export function createHaiku({ env = process.env, callApi = apiCall, callCli = cliCall, workSettings = () => usesWorkProvider(readSettings()), optedInToWork = () => wantsWork(env), now = Date.now }: HaikuOptions = {}): Haiku {
+export function createHaiku({ env = process.env, callApi = apiCall, callCli = cliCall, workSettings = () => usesWorkProvider(readSettings()), optedInToWork = () => wantsWork(env), callFoundry = foundryCall, now = Date.now }: HaikuOptions = {}): Haiku {
   let day = '';
   let calls = 0;
   const route = (): HaikuRoute => {
@@ -81,7 +82,10 @@ export function createHaiku({ env = process.env, callApi = apiCall, callCli = cl
       if (today !== day) { day = today; calls = 0; }
       if (++calls > DAILY_CALLS) return null;
       try {
-        const text = via === 'api' ? await callApi(officeKey(env)!, request) : await callCli(request, env, via === 'work');
+        const foundry = via === 'work' ? foundryFrom(env, readSettings()) : null;
+        const text = via === 'api' ? await callApi(officeKey(env)!, request)
+          : foundry ? await callFoundry(foundry, request)
+          : await callCli(request, env, via === 'work');
         return text?.trim() || null;
       } catch (error) {
         console.error(`Haiku call failed: ${error instanceof Error ? error.message.split('\n')[0] : String(error)}`);
@@ -113,6 +117,56 @@ async function apiCall(key: string, { system, prompt, maxTokens = 2000 }: HaikuR
   const body = await res.json() as { stop_reason?: string; content?: { type: string; text?: string }[] };
   if (body.stop_reason === 'refusal') return null;
   return (body.content ?? []).flatMap((block) => (block.type === 'text' && block.text ? [block.text] : [])).join('\n');
+}
+
+export interface Foundry { baseUrl: string; key: string; models: string[] }
+
+/** Claude Code's settings keep `env` as an object, or (older files) a list of `KEY=value` strings. */
+function settingsEnv(settings: unknown): Record<string, string> {
+  const env = (settings as { env?: unknown } | null)?.env;
+  if (Array.isArray(env)) return Object.fromEntries(env.flatMap((e) => (typeof e === 'string' && e.includes('=') ? [[e.slice(0, e.indexOf('=')), e.slice(e.indexOf('=') + 1)]] : [])));
+  return env && typeof env === 'object' ? Object.fromEntries(Object.entries(env).filter(([, v]) => typeof v === 'string')) as Record<string, string> : {};
+}
+
+/**
+ * Your Microsoft Foundry endpoint and key, from the environment or Claude Code's settings, and the models to try:
+ * your choice, Haiku, then Sonnet 5.5 and your Sonnet setting (in case Haiku isn't deployed there).
+ */
+export function foundryFrom(env: NodeJS.ProcessEnv, settings: unknown): Foundry | null {
+  const fromSettings = settingsEnv(settings);
+  const get = (k: string) => env[k]?.trim() || fromSettings[k]?.trim() || '';
+  const baseUrl = get('ANTHROPIC_FOUNDRY_BASE_URL').replace(/\/$/, '');
+  const key = get('ANTHROPIC_FOUNDRY_API_KEY');
+  if (!baseUrl.startsWith('https://') || !key) return null;
+  const models = [get('AGENT_OFFICE_WORK_MODEL'), get('ANTHROPIC_DEFAULT_HAIKU_MODEL'), MODEL, 'claude-sonnet-5-5', get('ANTHROPIC_DEFAULT_SONNET_MODEL')].filter(Boolean);
+  return { baseUrl, key, models: [...new Set(models)] };
+}
+
+/** The model that last answered on Foundry, tried first next time. */
+let foundryModel: string | null = null;
+
+async function foundryCall({ baseUrl, key, models }: Foundry, { system, prompt, maxTokens = 2000 }: HaikuRequest) {
+  const order = foundryModel && models.includes(foundryModel) ? [foundryModel, ...models.filter((m) => m !== foundryModel)] : models;
+  let last = '';
+  for (const model of order) {
+    const res = await fetch(`${baseUrl}/v1/messages`, {
+      method: 'POST',
+      headers: { 'x-api-key': key, 'api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model, max_tokens: maxTokens, system, messages: [{ role: 'user', content: prompt }] }),
+      signal: AbortSignal.timeout(60_000),
+    });
+    if (res.ok) {
+      if (foundryModel !== model) console.log(`Haiku helpers: using ${model} on Microsoft Foundry.`);
+      foundryModel = model;
+      const body = await res.json() as { stop_reason?: string; content?: { type: string; text?: string }[] };
+      if (body.stop_reason === 'refusal') return null;
+      return (body.content ?? []).flatMap((block) => (block.type === 'text' && block.text ? [block.text] : [])).join('\n');
+    }
+    last = `HTTP ${res.status} ${(await res.text()).slice(0, 200)}`;
+    // Only a model that isn't deployed is worth trying the next one for.
+    if (res.status !== 404 && !/deployment|model/i.test(last)) break;
+  }
+  throw new Error(`Foundry: ${last}`);
 }
 
 /** `claude -p` on the smallest model. Work keys are stripped, unless you opted in to them paying (`work`). */
