@@ -92,7 +92,8 @@ Click an agent to open its session on claude.ai. Got it is remembered in your br
 Claude Haiku turns what the office sees into a few words:
 
 - **Catch me up** (the sparkle button, top right): come back after 20 minutes or more and the office opens
-  with a short briefing on what needs you, what finished and what's still moving. Press it any time for the last few hours.
+  with a catch-up grouped into needs you, might be stuck, finished and still working, one line per thread. Projects
+  you have on show come first, hidden ones after. Click a thread to open its card. Press it any time for the last few hours.
 - **Ask the office**: type a question ("what's waiting on me?") in the same panel.
 - **The pet speaks**: when threads finish, ask for you or look stuck, the desktop pet says one line
   and your computer reads it out loud (`say` on macOS). Untick *The desktop pet reads updates out loud* to keep it quiet.

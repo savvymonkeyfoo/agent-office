@@ -1,7 +1,7 @@
 // Haiku helpers: who pays, what the office notices, and the briefing, pet lines, stuck check and ask box built on it.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createHaiku, foundryFrom, officeKey, wantsWork, type Haiku, type HaikuRequest } from '../src/server/haiku.ts';
-import { createInsights, describeChanges, parseStuck, plainBriefing, plainLine, recordLine } from '../src/server/insights.ts';
+import { createInsights, describeChanges, briefingGroups, parseLines, parseStuck, plainLine, recordLine } from '../src/server/insights.ts';
 import { activityFromEvents } from '../src/cloud/sessions.ts';
 import { cleanSettings } from '../src/server/settings.ts';
 import type { AgentRecord } from '../src/shared/agent.ts';
@@ -109,21 +109,47 @@ describe('what the office notices', () => {
 });
 
 describe('briefing and ask box', () => {
-  it('briefs on what changed since you left, and says nothing when nothing did', async () => {
+  it('briefs in groups on what changed since you left, and says nothing when nothing did', async () => {
     let t = 1_000_000;
-    const { haiku, asked } = fakeHaiku();
+    const { haiku, asked } = fakeHaiku(() => 'Sure, here: {"0": "Wants to push to main."}');
     const insights = createInsights({ haiku, now: () => t });
     insights.observe([rec('a', 'working')]);
-    expect(await insights.briefing(t - 1)).toEqual({ text: null, changes: 0 });
+    expect(await insights.briefing(t - 1)).toEqual({ groups: [], others: [], changes: 0 });
     t += 60_000;
     insights.observe([rec('a', 'needs', { question: { text: 'Push to main?' } })]);
-    expect(await insights.briefing(t - 120_000)).toEqual({ text: 'From Haiku.', changes: 1 });
-    expect(asked[0].prompt).toContain('asked you: Push to main?');
+    const brief = await insights.briefing(t - 120_000);
+    expect(brief.changes).toBe(1);
+    expect(brief.groups).toEqual([{ kind: 'needs', title: 'Needs you', items: [{ sessionId: 'a', name: 'Thread a', project: 'Office', line: 'Wants to push to main.' }] }]);
+    expect(asked[0].prompt).toContain('0: [Needs you] "Thread a": Push to main?');
   });
 
-  it('falls back to a plain briefing and pet line without Haiku', () => {
+  it('puts hidden projects last, and keeps the raw text when Haiku is quiet', async () => {
+    let t = 0;
+    const { haiku } = fakeHaiku(() => null);
+    const insights = createInsights({ haiku, now: () => t });
+    insights.observe([rec('a', 'working'), rec('b', 'working', { project: 'Side' })]);
+    t = 1000;
+    insights.observe([rec('a', 'needs', { question: { text: 'Merge?' } }), rec('b', 'done', { project: 'Side', lastMessage: 'Shipped it.' })]);
+    const brief = await insights.briefing(0, ['Side']);
+    expect(brief.groups.map((g) => [g.title, g.items.map((i) => i.line)])).toEqual([['Needs you', ['Merge?']]]);
+    expect(brief.others.map((g) => [g.title, g.items.map((i) => i.line)])).toEqual([['Finished', ['Shipped it.']]]);
+  });
+
+  it('groups threads: needs you, stuck, finished once each, still working', () => {
+    const changes = [
+      { at: 0, kind: 'finished' as const, sessionId: 'c', name: 'Fix login', project: 'x', detail: 'Done.' },
+      { at: 1, kind: 'finished' as const, sessionId: 'c', name: 'Fix login', project: 'x', detail: 'Done again.' },
+    ];
+    const groups = briefingGroups(changes, [rec('a', 'needs'), rec('s', 'working', { stuck: 'looping' }), rec('b', 'working', { progress: ['✱ Tests'] }), rec('k', 'working', { coordinator: true })]);
+    expect(groups.map((g) => [g.kind, g.items.map((i) => `${i.sessionId}:${i.line}`)])).toEqual([
+      ['needs', ['a:']], ['stuck', ['s:looping']], ['finished', ['c:Done again.']], ['working', ['b:Tests']],
+    ]);
+    expect(parseLines('no json')).toEqual({});
+    expect(parseLines('{"0": " hi ", "1": 3}')).toEqual({ '0': 'hi' });
+  });
+
+  it('falls back to a plain pet line without Haiku', () => {
     const changes = [{ at: 0, kind: 'finished' as const, sessionId: 'c', name: 'Fix login', project: 'x', detail: '' }];
-    expect(plainBriefing(changes, [rec('a', 'needs'), rec('b', 'working')])).toBe('"Thread a" needs you. Finished: "Fix login". 1 still working.');
     expect(plainLine(changes)).toBe('Fix login is done.');
   });
 

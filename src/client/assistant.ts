@@ -12,7 +12,13 @@ interface Options {
   now?: () => number;
   /** Called when the panel opens, so the agent card can close (they share a corner). */
   onOpen?: () => void;
+  /** Called with a thread's session id when you click it in the catch-up, to open its card. */
+  onSelect?: (sessionId: string) => void;
 }
+
+interface BriefingItem { sessionId: string; name: string; project: string; line: string }
+interface BriefingGroup { kind: string; title: string; items: BriefingItem[] }
+interface Briefing { groups: BriefingGroup[]; others?: BriefingGroup[] }
 
 const safeStorage = () => { try { return window.localStorage; } catch { return null; } };
 const para = (text: string, className = '') => Object.assign(document.createElement('p'), { textContent: text, className });
@@ -21,7 +27,7 @@ const para = (text: string, className = '') => Object.assign(document.createElem
  * The office's Haiku corner (markup in index.html): a catch-up on what happened while you were away, opened by itself
  * when you come back, an ask box, and the pet's voice switch. Hidden when Haiku is off on this computer.
  */
-export function mountAssistant(button: HTMLButtonElement, panel: HTMLElement, { request = fetch, storage = safeStorage(), now = Date.now, onOpen }: Options = {}) {
+export function mountAssistant(button: HTMLButtonElement, panel: HTMLElement, { request = fetch, storage = safeStorage(), now = Date.now, onOpen, onSelect }: Options = {}) {
   let state: AssistantState | null = null;
   const read = () => { try { return Number(storage?.getItem(SEEN_KEY)) || 0; } catch { return 0; } };
   const write = (t: number) => { try { storage?.setItem(SEEN_KEY, String(t)); } catch { /* private window */ } };
@@ -36,12 +42,43 @@ export function mountAssistant(button: HTMLButtonElement, panel: HTMLElement, { 
   function close() { panel.hidden = true; button.setAttribute('aria-pressed', 'false'); }
   panel.querySelector<HTMLButtonElement>('[data-close]')!.onclick = close;
 
+  const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') =>
+    Object.assign(document.createElement(tag), { className, textContent: text });
+
+  /** One group: a heading, then a row per thread (name, project, one line); a row opens that thread's card. */
+  function group({ kind, title, items }: BriefingGroup, open = true) {
+    const section = el('section', `brief-group ${kind}`);
+    const list = el('ul');
+    for (const item of items) {
+      // Hidden projects have no agent in the office to open, so their rows are plain.
+      const row = open ? el('button', 'brief-item') : el('div', 'brief-item');
+      if (row instanceof HTMLButtonElement) { row.type = 'button'; row.onclick = () => onSelect?.(item.sessionId); }
+      const head = el('span', 'brief-head');
+      head.append(el('b', '', item.name), el('span', 'dim', item.project));
+      row.append(head, el('span', 'brief-line', item.line));
+      const li = el('li');
+      li.append(row);
+      list.append(li);
+    }
+    section.append(el('h3', '', `${title} · ${items.length}`), list);
+    return section;
+  }
+
   async function catchUp(since: number, auto: boolean) {
     briefing.replaceChildren(para('Reading the office…', 'dim'));
     if (!auto) open();
-    const body = await request(`/api/briefing?since=${Math.floor(since)}`).then((r) => (r.ok ? r.json() : null), () => null) as { text: string | null } | null;
-    if (auto && !body?.text) { briefing.replaceChildren(); return; }
-    briefing.replaceChildren(para(body ? (body.text ?? 'Nothing new in the last few hours.') : "Couldn't reach the office."));
+    const body = await request(`/api/briefing?since=${Math.floor(since)}`).then((r) => (r.ok ? r.json() : null), () => null) as Briefing | null;
+    const others = body?.others ?? [];
+    const empty = !body?.groups?.length && !others.length;
+    if (auto && empty) { briefing.replaceChildren(); return; }
+    if (!body) briefing.replaceChildren(para("Couldn't reach the office."));
+    else if (empty) briefing.replaceChildren(para('Nothing new in the last few hours.'));
+    else {
+      // The projects you have on show first, then the ones you've hidden from the office.
+      const parts = body.groups.map((g) => group(g));
+      if (others.length) parts.push(el('p', 'brief-others', 'Other projects'), ...others.map((g) => group(g, false)));
+      briefing.replaceChildren(...parts);
+    }
     if (auto) open();
   }
 
