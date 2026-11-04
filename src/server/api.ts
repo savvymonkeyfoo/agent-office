@@ -29,7 +29,7 @@ const MAX_BODY = 4096;
 const MAX_PROJECTS_BODY = 64 * 1024;
 const MAX_ID = 200;
 
-export function createApi(feed: Feed, acknowledged?: AckStore, usage?: UsageApi, hiddenProjects?: HiddenProjectsStore, pet?: PetLauncher, assistant?: AssistantApi): ApiHandler {
+export function createApi(feed: Feed, acknowledged?: AckStore, usage?: UsageApi, hiddenProjects?: HiddenProjectsStore, pet?: PetLauncher, assistant?: AssistantApi, workProjects?: HiddenProjectsStore): ApiHandler {
   return async (req, res) => {
     const path = new URL(req.url ?? '/', 'http://local').pathname;
 
@@ -80,10 +80,13 @@ export function createApi(feed: Feed, acknowledged?: AckStore, usage?: UsageApi,
       return true;
     }
 
-    if (path === '/api/hidden-projects' && hiddenProjects) {
+    // Two lists of project names: unticked ones, and ones marked as Capgemini work.
+    const lists: Record<string, HiddenProjectsStore | undefined> = { '/api/hidden-projects': hiddenProjects, '/api/work-projects': workProjects };
+    const store = lists[path];
+    if (store) {
       if (req.method === 'GET') {
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-        res.end(JSON.stringify(hiddenProjects.get()));
+        res.end(JSON.stringify(store.get()));
         return true;
       }
       if (req.method === 'PUT') {
@@ -96,7 +99,7 @@ export function createApi(feed: Feed, acknowledged?: AckStore, usage?: UsageApi,
           return reply(res, 400, 'Body must be a JSON list of project names.');
         }
         if (!list) return reply(res, 400, 'Body must be a JSON list of project names.');
-        hiddenProjects.set(list);
+        store.set(list);
         res.writeHead(204).end();
         return true;
       }

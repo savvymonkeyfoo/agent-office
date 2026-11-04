@@ -9,6 +9,11 @@ export function hiddenProjectsFile(homedir = os.homedir()) {
   return path.join(homedir, '.agent-office', 'hidden-projects.json');
 }
 
+/** Projects marked as Capgemini work in the Projects panel; every other project counts as personal. */
+export function workProjectsFile(homedir = os.homedir()) {
+  return path.join(homedir, '.agent-office', 'work-projects.json');
+}
+
 /**
  * Projects unticked in the office's Projects panel, kept on disk so every view
  * (the office in any browser, the desktop pet) hides the same ones.
