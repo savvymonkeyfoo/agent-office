@@ -64,7 +64,7 @@ node scripts/pet.mjs uninstall
 ```
 
 Drag it anywhere; it remembers where you left it and stays above other windows on every desktop.
-Click it to open the session that's waiting on you (or the office). Right-click to pick its look (the classic office worker, the Innovation lab bot, or the office dog), change its size, or quit. Long lines stop at three in the bubble so its face stays in view; point at it to read the whole line.
+Click it to open the session that's waiting on you (or the office). Right-click to pick its look (the classic office worker, the Innovation lab bot, or the office dog), change its size, mute its voice (when the office reads its lines out loud), or quit. Long lines stop at three in the bubble so its face stays in view; point at it to read the whole line.
 Clicks anywhere else in its window go through to whatever's behind.
 
 Quit it and it stays off until you log in again. To bring it back sooner, click the paw button at the top right of the office (it appears once the pet is set up), or on a Mac open Agent Pet from Spotlight.

@@ -197,3 +197,30 @@ describe('the dog as a desktop pet', () => {
     expect(legs.every((leg) => Math.abs(leg.rotation.x - Math.PI / 2) < 1e-9)).toBe(true);
   });
 });
+
+describe('muting the pet from its right-click menu', () => {
+  it('tells the desktop app whether the voice is on, and switches it with the office setting', async () => {
+    const { petVoice } = await import('../src/client/pet/main.ts');
+    const sent: unknown[] = [];
+    let saved: unknown = null;
+    let state = { route: 'api', petVoice: true };
+    const request = (async (url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') { saved = JSON.parse(String(init.body)); state = { ...state, ...(saved as object) }; return { ok: true, json: async () => state }; }
+      return { ok: true, json: async () => state };
+    }) as typeof fetch;
+    const voice = petVoice({ postMessage: (m) => sent.push(m) }, request);
+    await voice.sync();
+    expect(sent.at(-1)).toEqual({ type: 'voice', available: true, on: true });
+    await voice.set(false);
+    expect(saved).toEqual({ petVoice: false });
+    expect(sent.at(-1)).toEqual({ type: 'voice', available: true, on: false });
+  });
+
+  it('offers no mute while the office has no voice (Haiku off, or an older office)', async () => {
+    const { petVoice } = await import('../src/client/pet/main.ts');
+    const sent: unknown[] = [];
+    await petVoice({ postMessage: (m) => sent.push(m) }, (async () => ({ ok: true, json: async () => ({ route: null, petVoice: true }) })) as unknown as typeof fetch).sync();
+    await petVoice({ postMessage: (m) => sent.push(m) }, (async () => ({ ok: false })) as unknown as typeof fetch).sync();
+    expect(sent).toEqual([{ type: 'voice', available: false, on: true }, { type: 'voice', available: false, on: true }]);
+  });
+});

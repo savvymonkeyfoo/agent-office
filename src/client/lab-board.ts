@@ -1,11 +1,9 @@
 // The Innovation lab's wall board: "Waiting on you" and "Working on now" in the middle, the
-// projects in the room (in their rug colours) on the left, and this week's tokens on the right.
+// projects in the room (in their rug colours) on the left.
 // Warm colours on a cream board, drawn on canvases like the Control room's screen wall.
 import * as THREE from 'three';
 import type { AgentRecord, OfficeState } from '../shared/agent.ts';
-import type { ProjectTokens } from '../shared/usage.ts';
 import { newCanvas, plainText } from './screen.ts';
-import { formatTokens } from './usage.ts';
 import { boardModel, type BoardModel } from './board.ts';
 
 /** Rug colours, one per project, picked by name so a project keeps its colour. */
@@ -28,7 +26,6 @@ export interface LabBoardModel extends BoardModel {
   waiting: BoardRow[];
   working: BoardRow[];
   projects: { project: string; sessions: number; waiting: number }[];
-  tokens: ProjectTokens[];
 }
 
 /** What each session is up to, in a line: the question for a waiting one, the latest step for a working one. */
@@ -38,7 +35,7 @@ export function taskLine(r: AgentRecord) {
   return (step ?? r.activity.at(-1) ?? plainText(r.lastMessage ?? '')).replace(/^[○◯•\-\s]+/, '');
 }
 
-export function labBoardModel(records: AgentRecord[], tokens: ProjectTokens[] = []): LabBoardModel {
+export function labBoardModel(records: AgentRecord[]): LabBoardModel {
   const row = (r: AgentRecord): BoardRow => ({ name: r.name, project: r.project, line: taskLine(r) });
   const projects = new Map<string, { project: string; sessions: number; waiting: number }>();
   for (const r of records) {
@@ -51,7 +48,6 @@ export function labBoardModel(records: AgentRecord[], tokens: ProjectTokens[] = 
     waiting: records.filter((r) => r.state === 'needs').map(row),
     working: records.filter((r) => r.state === 'working').map(row),
     projects: [...projects.values()].sort((a, b) => b.waiting - a.waiting || b.sessions - a.sessions),
-    tokens,
   };
 }
 
@@ -180,42 +176,6 @@ export function paintLabProjects(g: CanvasRenderingContext2D, model: LabBoardMod
   });
 }
 
-export function paintLabTokens(g: CanvasRenderingContext2D, model: LabBoardModel) {
-  const { width: w, height: h } = LAB_CANVAS.side;
-  paintBase(g, w, h);
-  g.fillStyle = INK;
-  g.font = FONT(58);
-  g.fillText('Tokens this week', 32, 28);
-  const total = model.tokens.reduce((s, p) => s + p.tokens, 0);
-  if (!model.tokens.length) {
-    g.fillStyle = MUTED;
-    g.font = FONT(42, 700);
-    g.fillText('—', 32, 120);
-    return;
-  }
-  g.fillStyle = INK;
-  g.font = FONT(96);
-  g.fillText(formatTokens(total), 32, 96);
-  const top = 236, rowH = 84, fits = Math.floor((h - top) / rowH), max = Math.max(...model.tokens.map((p) => p.tokens));
-  model.tokens.slice(0, fits).forEach((p, i) => {
-    const y = top + i * rowH;
-    g.fillStyle = MUTED;
-    g.font = FONT(38, 700);
-    g.fillText(fit(g, p.project, 250), 32, y + 6);
-    const barX = 300, barW = w - barX - 150;
-    g.fillStyle = '#EFE4D2';
-    rounded(g, barX, y + 10, barW, 36, 18);
-    g.fill();
-    g.fillStyle = projectColor(p.project);
-    rounded(g, barX, y + 10, Math.max(36, (barW * p.tokens) / max), 36, 18);
-    g.fill();
-    g.fillStyle = INK;
-    g.font = FONT(38);
-    g.textAlign = 'right';
-    g.fillText(formatTokens(p.tokens), w - 32, y + 6);
-    g.textAlign = 'left';
-  });
-}
 
 class Display {
   readonly mesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
@@ -241,23 +201,16 @@ class Display {
   }
 }
 
-/** Refreshes tokens from /api/usage now and then (a page without the server keeps "—"). */
-const TOKENS_EVERY = 60_000;
-
-/** The board's three panels, kept up to date from the occupants and the usage feed. */
+/** The board's two panels (the board and the projects beside it), kept up to date from the occupants. */
 export class LabBoard {
   readonly centre: Display;
   readonly left: Display;
-  readonly right: Display;
   model: LabBoardModel = labBoardModel([]);
   private key = '';
-  private tokens: ProjectTokens[] = [];
-  private tokensAt = -Infinity;
 
   constructor(centre: { w: number; h: number }, side: { w: number; h: number }) {
     this.centre = new Display(centre.w, centre.h, LAB_CANVAS.centre);
     this.left = new Display(side.w, side.h, LAB_CANVAS.side);
-    this.right = new Display(side.w, side.h, LAB_CANVAS.side);
     this.repaint();
   }
 
@@ -265,27 +218,16 @@ export class LabBoard {
 
   /** Call every frame with each desk's agent; it only redraws when something changed. */
   update(occupants: Map<number, AgentRecord>) {
-    this.fetchTokens();
     const records = [...occupants].sort(([a], [b]) => a - b).map(([, r]) => r);
-    const key = JSON.stringify([records, this.tokens]);
+    const key = JSON.stringify(records);
     if (key === this.key) return;
     this.key = key;
-    this.model = { ...labBoardModel(records, this.tokens), tiles: boardModel(occupants).tiles };
+    this.model = { ...labBoardModel(records), tiles: boardModel(occupants).tiles };
     this.repaint();
-  }
-
-  private fetchTokens() {
-    const now = Date.now();
-    if (typeof fetch !== 'function' || typeof window === 'undefined' || now - this.tokensAt < TOKENS_EVERY) return;
-    this.tokensAt = now;
-    fetch('/api/usage').then((r) => (r.ok ? r.json() : null)).then((u) => {
-      if (u && Array.isArray(u.projects)) this.tokens = u.projects;
-    }).catch(() => {});
   }
 
   private repaint() {
     this.centre.paint((g) => paintLabCentre(g, this.model));
     this.left.paint((g) => paintLabProjects(g, this.model));
-    this.right.paint((g) => paintLabTokens(g, this.model));
   }
 }

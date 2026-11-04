@@ -153,6 +153,20 @@ export function startPet(root: HTMLElement, { kind, officeUrl, createScene = cre
   };
 }
 
+/**
+ * The pet's voice (the office's Haiku lines read out loud) is the office setting `petVoice`, the same switch as
+ * the Catch me up panel. The desktop app's right-click menu shows it as "Mute voice": this tells it whether the
+ * voice is on (`available` is false while Haiku is off, so there's nothing to mute) and switches it for it.
+ */
+export function petVoice(bridge: NativeBridge | null, request: typeof fetch = fetch) {
+  const report = (state: { route?: unknown; petVoice?: unknown } | null) =>
+    bridge?.postMessage({ type: 'voice', available: !!state?.route, on: state?.petVoice !== false });
+  const sync = () => request('/api/assistant').then((r) => (r.ok ? r.json() : null), () => null).then(report, () => {});
+  const set = (on: boolean) => request('/api/settings', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ petVoice: on }) })
+    .then(() => sync(), () => {});
+  return { sync, set };
+}
+
 function defaultOpen(url: string) {
   if (native) native.postMessage({ type: 'open', url });
   else window.open(url, '_blank', 'noopener');
@@ -173,7 +187,8 @@ if (!import.meta.env.VITEST) {
     });
     // In a plain browser the page handles its own clicks; in the desktop app the window does (it also drags).
     if (!native) root.addEventListener('click', () => pet.click());
-    Object.assign(window, { pet: { click: pet.click, hover: pet.hover, applyFeed: pet.applyFeed, say: pet.say } });
+    const voice = petVoice(native);
+    Object.assign(window, { pet: { click: pet.click, hover: pet.hover, applyFeed: pet.applyFeed, say: pet.say, setVoice: voice.set } });
     const events = new EventSource('/api/events');
     events.onmessage = (e) => pet.applyFeed(JSON.parse(e.data));
     // EventSource retries on its own; until it's back, the pet dozes.
@@ -183,6 +198,7 @@ if (!import.meta.env.VITEST) {
     lines.onmessage = (e) => { const a = JSON.parse(e.data); if (typeof a?.text === 'string') pet.say(a.text, !!a.urgent); };
     const syncHidden = () => serverHiddenSync.load().then((list) => list && pet.setHiddenProjects(list));
     syncHidden();
-    setInterval(syncHidden, HIDDEN_POLL_MS);
+    voice.sync();
+    setInterval(() => { syncHidden(); voice.sync(); }, HIDDEN_POLL_MS);
   }
 }

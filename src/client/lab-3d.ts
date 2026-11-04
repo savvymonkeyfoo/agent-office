@@ -96,11 +96,21 @@ function addBackWall(group: THREE.Group, { room, backWall: wallPlan }: LabLayout
   const middle = at(framed(centre.w, centre.h), 0, y, z + 0.07);
   middle.add(at(board.centre.mesh, 0, 0, 0.056));
   backWall.add(middle);
-  for (const s of [-1, 1]) {
-    const panel = at(framed(side.w, side.h), s * side.x, y - (centre.h - side.h) / 2, z + 0.07);
-    panel.add(at((s < 0 ? board.left : board.right).mesh, 0, 0, 0.056));
-    backWall.add(panel);
+  const sideY = y - (centre.h - side.h) / 2;
+  const panel = at(framed(side.w, side.h), -side.x, sideY, z + 0.07);
+  panel.add(at(board.left.mesh, 0, 0, 0.056));
+  backWall.add(panel);
+  // Opposite the projects, a framed living moss panel to match the green wall.
+  const moss = at(framed(side.w, side.h), side.x, sideY, z + 0.07);
+  moss.add(at(box(side.w, side.h, 0.04, '#2F4A33', { outline: 0 }), 0, 0, 0.05));
+  // A jittered grid of leafy tufts.
+  const cols = 11, rows = 10;
+  for (let k = 0; k < cols * rows; k++) {
+    const jx = ((k * 0.618034) % 1) - 0.5, jy = ((k * 0.7548777) % 1) - 0.5;
+    const x = ((k % cols) + 0.5 + jx * 0.6) / cols - 0.5, y = (Math.floor(k / cols) + 0.5 + jy * 0.6) / rows - 0.5;
+    moss.add(at(ball(0.15 + ((k * 7) % 5) * 0.025, LEAF_GREENS[(k * 5) % LEAF_GREENS.length], { outline: 0.05 }), x * (side.w - 0.25), y * (side.h - 0.25), 0.14));
   }
+  backWall.add(moss);
   // Picture lights over the panels.
   for (const x of [-side.x, 0, side.x]) {
     const lamp = tag(new THREE.Group(), 'lamp');
