@@ -63,7 +63,7 @@ export function createApi(feed: Feed, acknowledged?: AckStore, usage?: UsageApi,
       return true;
     }
 
-    if (assistant && path.startsWith('/api/') && await handleAssistant(assistant, req, res, path)) return true;
+    if (assistant && path.startsWith('/api/') && await handleAssistant(assistant, req, res, path, hiddenProjects)) return true;
 
     if (req.method === 'GET' && path === '/api/pet' && pet) {
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
@@ -128,7 +128,7 @@ const json = (res: ServerResponse, body: unknown) => {
   return true;
 };
 
-async function handleAssistant({ insights, haiku, settings }: AssistantApi, req: IncomingMessage, res: ServerResponse, path: string) {
+async function handleAssistant({ insights, haiku, settings }: AssistantApi, req: IncomingMessage, res: ServerResponse, path: string, hiddenProjects?: HiddenProjectsStore) {
   if (req.method === 'GET' && path === '/api/assistant') return json(res, { route: haiku.route(), ...settings.get() });
 
   if (req.method === 'PUT' && path === '/api/settings') {
@@ -143,7 +143,8 @@ async function handleAssistant({ insights, haiku, settings }: AssistantApi, req:
   if (req.method === 'GET' && path === '/api/briefing') {
     const since = Number(new URL(req.url ?? '/', 'http://local').searchParams.get('since'));
     if (!Number.isFinite(since) || since <= 0) return reply(res, 400, 'Give ?since= as epoch milliseconds.');
-    return json(res, await insights.briefing(since));
+    // Projects hidden in the office go last.
+    return json(res, await insights.briefing(since, hiddenProjects?.get() ?? []));
   }
 
   if (req.method === 'POST' && path === '/api/ask') {

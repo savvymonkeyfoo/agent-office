@@ -66,17 +66,6 @@ const changeLine = (c: Change, now: number) =>
 
 const VOICE = 'Write in plain, warm Australian English. Use contractions. No markdown, headings, bullet points or emoji. Call threads by their names. Never invent facts that are not in the data.';
 
-/** The briefing without Haiku: counts and names. */
-export function plainBriefing(changes: Change[], records: AgentRecord[]) {
-  const needing = records.filter((r) => r.state === 'needs');
-  const finished = [...new Set(changes.filter((c) => c.kind === 'finished').map((c) => c.name))];
-  const working = records.filter((r) => r.state === 'working');
-  const parts: string[] = [];
-  if (needing.length) parts.push(`${needing.length === 1 ? `"${needing[0].name}" needs you` : `${needing.length} threads need you: ${needing.map((r) => `"${r.name}"`).join(', ')}`}.`);
-  if (finished.length) parts.push(`Finished: ${finished.map((n) => `"${n}"`).join(', ')}.`);
-  if (working.length) parts.push(`${working.length} still working.`);
-  return parts.join(' ') || 'Nothing much happened while you were away.';
-}
 
 /** The pet's line without Haiku. */
 export function plainLine(changes: Change[]) {
@@ -93,6 +82,44 @@ export function plainLine(changes: Change[]) {
 export function parseStuck(reply: string | null): string | null {
   const m = reply?.trim().match(/^STUCK:\s*(.+)/is);
   return m ? clip(m[1], 200) : null;
+}
+
+export type BriefingKind = 'needs' | 'stuck' | 'finished' | 'working';
+export interface BriefingItem { sessionId: string; name: string; project: string; line: string }
+export interface BriefingGroup { kind: BriefingKind; title: string; items: BriefingItem[] }
+/** `groups` are the projects you have on show in the office; `others` the ones you've hidden, listed after. */
+export interface Briefing { groups: BriefingGroup[]; others: BriefingGroup[]; changes: number }
+
+const PER_GROUP = 8;
+
+/** The catch-up's groups, with each thread's raw text: what needs you now, what looks stuck, what finished since, what's still going. */
+export function briefingGroups(recent: Change[], records: AgentRecord[]): BriefingGroup[] {
+  const item = (r: { sessionId: string; name: string; project: string }, line: string): BriefingItem => ({ sessionId: r.sessionId, name: r.name, project: r.project, line });
+  const needing = records.filter((r) => r.state === 'needs');
+  const stuck = records.filter((r) => r.state === 'working' && r.stuck);
+  const busy = new Set([...needing, ...stuck].map((r) => r.sessionId));
+  const finished = new Map<string, Change>();
+  for (const c of recent) if (c.kind === 'finished' && !busy.has(c.sessionId)) finished.set(c.sessionId, c);
+  const working = records.filter((r) => r.state === 'working' && !r.stuck && !r.coordinator);
+  const groups: BriefingGroup[] = [
+    { kind: 'needs', title: 'Needs you', items: needing.map((r) => item(r, r.question?.text ?? r.lastMessage ?? '')) },
+    { kind: 'stuck', title: 'Might be stuck', items: stuck.map((r) => item(r, r.stuck!)) },
+    { kind: 'finished', title: 'Finished', items: [...finished.values()].map((c) => item(c, c.detail)) },
+    { kind: 'working', title: 'Still working', items: working.map((r) => item(r, currentStep(r))) },
+  ];
+  return groups.filter((g) => g.items.length).map((g) => ({ ...g, items: g.items.slice(0, PER_GROUP) }));
+}
+
+/** Haiku's `{ "0": "line", … }`, wherever it sits in the reply. */
+export function parseLines(reply: string | null): Record<string, string> {
+  const m = reply?.match(/\{[\s\S]*\}/);
+  if (!m) return {};
+  try {
+    const obj = JSON.parse(m[0]) as Record<string, unknown>;
+    return Object.fromEntries(Object.entries(obj).filter(([, v]) => typeof v === 'string' && v.trim()).map(([k, v]) => [k, (v as string).trim()]));
+  } catch {
+    return {};
+  }
 }
 
 export interface Announcement { text: string; at: number; urgent: boolean }
@@ -201,19 +228,26 @@ export function createInsights({ haiku, now = Date.now, recentActivity, gatherMs
 
     changesSince: (since: number) => changes.filter((c) => c.at > since),
 
-    /** A short catch-up on what happened since `since`, most urgent first. */
-    async briefing(since: number) {
+    /**
+     * A catch-up on what happened since `since`, in groups (needs you, stuck, finished, still working), one short
+     * line per thread: the projects on show first, then the `hidden` ones.
+     */
+    async briefing(since: number, hidden: string[] = []): Promise<Briefing> {
       const recent = changes.filter((c) => c.at > since);
-      const needing = latest.filter((r) => r.state === 'needs');
-      if (!recent.length && !needing.length) return { text: null, changes: 0 };
-      const fallback = plainBriefing(recent, latest);
-      const away = Math.round((now() - since) / MINUTE);
-      const text = await haiku.ask({
-        system: `You brief the user when they come back to their desk, about the AI agents (threads) working for them. ${VOICE}`,
-        prompt: `They've been away about ${away < 120 ? `${away} minutes` : `${Math.round(away / 60)} hours`}.\n\nWhat happened while they were away:\n${recent.map((c) => changeLine(c, now())).join('\n') || '(nothing new)'}\n\nEvery thread right now:\n${latest.map(recordLine).join('\n')}\n\nWrite 2 to 5 short sentences. Start with what needs them, most urgent first, saying briefly what each one wants. Then what finished. Then, in one sentence, what's still moving. Skip anything unimportant.`,
+      const off = new Set(hidden);
+      const groups = briefingGroups(recent.filter((c) => !off.has(c.project)), latest.filter((r) => !off.has(r.project)));
+      const others = briefingGroups(recent.filter((c) => off.has(c.project)), latest.filter((r) => off.has(r.project)));
+      if (![...groups, ...others].some((g) => g.kind !== 'working')) return { groups: [], others: [], changes: recent.length };
+      // Haiku shortens each thread's raw text to one line; anything it skips keeps the raw text, clipped.
+      const items = [...groups, ...others].flatMap((g) => (g.kind === 'stuck' ? [] : g.items.map((item) => ({ g, item }))));
+      const reply = items.length ? await haiku.ask({
+        system: `You write one short line per AI agent thread for the user's catch-up list. ${VOICE}`,
+        prompt: `For each item, write at most 14 words: for "Needs you", what it wants the user to decide or do; for "Finished", what it got done; for "Still working", what it's doing now. Reply with only a JSON object mapping each number to its line.\n\n${items.map(({ g, item }, i) => `${i}: [${g.title}] "${item.name}": ${clip(item.line, 500) || '(no detail)'}`).join('\n')}`,
         maxTokens: 1500,
-      });
-      return { text: text ?? fallback, changes: recent.length };
+      }) : null;
+      const lines = parseLines(reply);
+      items.forEach(({ item }, i) => { item.line = clip(lines[String(i)] ?? item.line, 160); });
+      return { groups, others, changes: recent.length };
     },
 
     /** Answers a question about the office from what it can see. */

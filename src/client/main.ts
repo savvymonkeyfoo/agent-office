@@ -76,7 +76,7 @@ export function boot({ createOffice }: BootOptions = {}) {
   const assistantButton = document.getElementById('assistant');
   const assistantPanel = document.getElementById('assistant-panel');
   const assistant = !import.meta.env.VITEST && assistantButton instanceof HTMLButtonElement && assistantPanel
-    ? mountAssistant(assistantButton, assistantPanel, { onOpen: () => select(null) })
+    ? mountAssistant(assistantButton, assistantPanel, { onOpen: () => select(null), onSelect: (id) => select(id) })
     : null;
 
   office.onPick(select);

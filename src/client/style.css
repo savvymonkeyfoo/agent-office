@@ -178,6 +178,21 @@ a.btn { display: inline-flex; align-items: center; text-decoration: none; box-si
 .assistant-panel .briefing p, .assistant-panel .answer p { margin: 0; font-size: 14px; line-height: 1.5; }
 .assistant-panel .briefing:empty { display: none; }
 .assistant-panel .dim { color: var(--muted); }
+/* The catch-up: a heading per group, a row per thread. */
+.assistant-panel .briefing { display: flex; flex-direction: column; gap: 12px; max-height: 50vh; overflow-y: auto; }
+.assistant-panel .brief-group h3 { margin: 0 0 4px; font: 700 12px var(--body); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.assistant-panel .brief-group.needs h3 { color: var(--amber); }
+.assistant-panel .brief-group ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.assistant-panel .brief-item {
+  display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 8px 10px; border-radius: 10px; border: 1px solid transparent;
+  background: var(--chip); color: var(--ink); font: 500 14px var(--body); line-height: 1.4; text-align: left;
+}
+.assistant-panel button.brief-item { cursor: pointer; }
+.assistant-panel button.brief-item:hover, .assistant-panel button.brief-item:focus-visible { border-color: var(--line); }
+.assistant-panel .brief-head { display: flex; gap: 8px; align-items: baseline; justify-content: space-between; }
+.assistant-panel .brief-head .dim { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.assistant-panel .brief-line { font-size: 13px; color: var(--muted); }
+.assistant-panel .brief-others { margin: 4px 0 0; padding-top: 10px; border-top: 1px solid var(--line); font: 700 13px var(--body); color: var(--ink); }
 .assistant-panel .ask { display: flex; flex-direction: column; gap: 6px; }
 .assistant-panel .ask-row { display: flex; gap: 6px; }
 .assistant-panel .ask input {
